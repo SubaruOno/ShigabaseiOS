@@ -444,7 +444,7 @@ function YouTubeSection({
           team2:opponent_teams!videos_team2_id_fkey(name)`)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as VideoItem[];
+      return data as unknown as VideoItem[];
     },
     enabled: modalVisible,
     staleTime: 2 * 60 * 1000,
