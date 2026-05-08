@@ -10,6 +10,7 @@ export function usePushNotifications() {
 
   useEffect(() => {
     if (!user) return;
+    if (!Constants.isDevice) return;
 
     const register = async () => {
       if (Platform.OS === "android") {
