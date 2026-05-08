@@ -49,6 +49,14 @@
       "expo-secure-store",
       "expo-notifications",
       "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildFromSource": true
+          }
+        }
+      ],
       "./plugins/withRCTTurboModuleFix"
     ],
     "experiments": {

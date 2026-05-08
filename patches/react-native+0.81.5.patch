@@ -1,8 +1,26 @@
 diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
-index 2a67797..b3c1ef1 100644
+index 2a67797..ecd44b8 100644
 --- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
 +++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
-@@ -435,7 +435,10 @@ TraceSection s(
+@@ -366,13 +366,10 @@ id convertJSIValueToObjCObject(
+     @try {
+       [inv invokeWithTarget:strongModule];
+     } @catch (NSException *exception) {
+-      if (isSync) {
+-        // We can only convert NSException to JSError in sync method calls.
+-        // See https://github.com/reactwg/react-native-new-architecture/discussions/276#discussioncomment-12567155
+-        throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
+-      } else {
+-        @throw exception;
+-      }
++      // iOS 26: NSExceptions from TurboModule methods cause Hermes GC heap corruption.
++      // Suppress and log instead of re-throwing (both sync and async paths).
++      NSLog(@"[RCTTurboModule] Suppressed NSException in method '%s.%s': %@",
++            moduleName, methodName, exception);
+     } @finally {
+       [retainedObjectsForInvocation removeAllObjects];
+     }
+@@ -435,7 +432,10 @@ TraceSection s(
      @try {
        [inv invokeWithTarget:strongModule];
      } @catch (NSException *exception) {
