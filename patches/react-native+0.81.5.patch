@@ -1,0 +1,16 @@
+diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+index 2a67797..b3c1ef1 100644
+--- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
++++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+@@ -435,7 +435,10 @@ TraceSection s(
+     @try {
+       [inv invokeWithTarget:strongModule];
+     } @catch (NSException *exception) {
+-      throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
++      // iOS 26: Re-throwing JSError from an async void method corrupts the Hermes
++      // GC heap because there is no catch site on the JS thread. Log instead.
++      NSLog(@"[RCTTurboModule] Suppressed NSException in void method '%s.%s': %@",
++            moduleName, methodName, exception);
+     } @finally {
+       [retainedObjectsForInvocation removeAllObjects];
+     }
