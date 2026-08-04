@@ -51,6 +51,8 @@ function AppLayout() {
       .data as { type?: string; conversationId?: string; contentType?: string };
     if (data?.type === "dm" && data.conversationId) {
       router.push(`/chat/${data.conversationId}` as never);
+    } else if (data?.type === "weight_reminder") {
+      router.push("/(tabs)/weight");
     } else if (data?.type === "content") {
       if (data.contentType === "video") {
         router.push("/(tabs)/videos");
