@@ -22,6 +22,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 type Tab = "document" | "video";
 
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <Text style={styles.fieldError}>{message}</Text>
+  );
+}
+
 function SelectPicker({
   label,
   value,
@@ -30,6 +37,7 @@ function SelectPicker({
   onSelect,
   disabled,
   required,
+  error,
 }: {
   label: string;
   value: string;
@@ -38,6 +46,7 @@ function SelectPicker({
   onSelect: (val: string) => void;
   disabled?: boolean;
   required?: boolean;
+  error?: string;
 }) {
   const [visible, setVisible] = useState(false);
   const colorScheme = useColorScheme() ?? "light";
@@ -54,7 +63,7 @@ function SelectPicker({
         style={[
           styles.selectBtn,
           {
-            borderColor: disabled ? colors.icon + "50" : colors.icon,
+            borderColor: error ? "#ef4444" : disabled ? colors.icon + "50" : colors.icon,
             backgroundColor: colors.cardBg,
             opacity: disabled ? 0.5 : 1,
           },
@@ -73,6 +82,7 @@ function SelectPicker({
         </Text>
         <Ionicons name="chevron-down" size={16} color={colors.icon} />
       </TouchableOpacity>
+      <FieldError message={error} />
 
       <Modal visible={visible} transparent animationType="slide">
         <TouchableOpacity
@@ -123,6 +133,20 @@ function SelectPicker({
   );
 }
 
+type DocErrors = {
+  title?: string;
+  pageType?: string;
+  category?: string;
+  file?: string;
+};
+
+type VideoErrors = {
+  title?: string;
+  pageType?: string;
+  category?: string;
+  url?: string;
+};
+
 export default function UploadScreen() {
   const { user, hasRole } = useAuth();
   const colorScheme = useColorScheme() ?? "light";
@@ -137,6 +161,7 @@ export default function UploadScreen() {
   const [docPlayer, setDocPlayer] = useState("");
   const [docTeam1, setDocTeam1] = useState("");
   const [docFile, setDocFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [docErrors, setDocErrors] = useState<DocErrors>({});
 
   // Video form
   const [videoTitle, setVideoTitle] = useState("");
@@ -145,6 +170,7 @@ export default function UploadScreen() {
   const [videoTeam1, setVideoTeam1] = useState("");
   const [videoTeam2, setVideoTeam2] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [videoErrors, setVideoErrors] = useState<VideoErrors>({});
 
   const { data: categories } = useQuery({
     queryKey: ["all-categories"],
@@ -195,17 +221,36 @@ export default function UploadScreen() {
       (c) => c.type === "video" && (!videoPageType || c.page_type === videoPageType)
     ) ?? [];
 
+  const validateDoc = (): boolean => {
+    const errors: DocErrors = {};
+    if (!docTitle.trim()) errors.title = "タイトルを入力してください";
+    if (!docPageType) errors.pageType = "投稿先を選択してください";
+    if (!docCategory) errors.category = "カテゴリを選択してください";
+    if (!docFile) errors.file = "ファイルを選択してください";
+    setDocErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateVideo = (): boolean => {
+    const errors: VideoErrors = {};
+    if (!videoTitle.trim()) errors.title = "タイトルを入力してください";
+    if (!videoPageType) errors.pageType = "投稿先を選択してください";
+    if (!videoCategory) errors.category = "カテゴリを選択してください";
+    if (!videoUrl.trim()) {
+      errors.url = "YouTube URLを入力してください";
+    } else if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
+      errors.url = "YouTubeのURLを入力してください";
+    }
+    setVideoErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const uploadDocMutation = useMutation({
     mutationFn: async () => {
-      if (!docTitle.trim()) throw new Error("タイトルを入力してください");
-      if (!docCategory) throw new Error("カテゴリを選択してください");
-      if (!docFile) throw new Error("ファイルを選択してください");
-
-      // Supabase Storage にアップロード
-      const ext = docFile.name.split(".").pop();
+      const ext = docFile!.name.split(".").pop();
       const filePath = `${user!.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-      const base64 = await FileSystem.readAsStringAsync(docFile.uri, {
+      const base64 = await FileSystem.readAsStringAsync(docFile!.uri, {
         encoding: "base64",
       });
       const binaryString = atob(base64);
@@ -216,7 +261,7 @@ export default function UploadScreen() {
 
       const { error: uploadError } = await supabase.storage
         .from("documents")
-        .upload(filePath, bytes, { contentType: docFile.mimeType ?? "application/octet-stream" });
+        .upload(filePath, bytes, { contentType: docFile!.mimeType ?? "application/octet-stream" });
 
       if (uploadError) throw uploadError;
 
@@ -243,6 +288,7 @@ export default function UploadScreen() {
       setDocPlayer("");
       setDocTeam1("");
       setDocFile(null);
+      setDocErrors({});
       queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
     onError: (e: Error) => Alert.alert("エラー", e.message),
@@ -250,12 +296,6 @@ export default function UploadScreen() {
 
   const uploadVideoMutation = useMutation({
     mutationFn: async () => {
-      if (!videoTitle.trim()) throw new Error("タイトルを入力してください");
-      if (!videoCategory) throw new Error("カテゴリを選択してください");
-      if (!videoUrl.trim()) throw new Error("YouTube URLを入力してください");
-      if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be"))
-        throw new Error("YouTubeのURLを入力してください");
-
       const { error } = await supabase.from("videos").insert({
         title: videoTitle.trim(),
         category_id: videoCategory,
@@ -275,6 +315,7 @@ export default function UploadScreen() {
       setVideoTeam1("");
       setVideoTeam2("");
       setVideoUrl("");
+      setVideoErrors({});
       queryClient.invalidateQueries({ queryKey: ["videos"] });
     },
     onError: (e: Error) => Alert.alert("エラー", e.message),
@@ -293,6 +334,7 @@ export default function UploadScreen() {
         return;
       }
       setDocFile(file);
+      setDocErrors((prev) => ({ ...prev, file: undefined }));
     }
   };
 
@@ -310,6 +352,7 @@ export default function UploadScreen() {
 
   const cardBg = colors.cardBg;
   const borderColor = colors.borderColor;
+  const inputBg = colorScheme === "dark" ? "#2c2c2e" : "#f9fafb";
 
   return (
     <ScrollView
@@ -358,13 +401,17 @@ export default function UploadScreen() {
               タイトル <Text style={{ color: "#ef4444" }}>*</Text>
             </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor, backgroundColor: colorScheme === "dark" ? "#2c2c2e" : "#f9fafb" }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: docErrors.title ? "#ef4444" : borderColor, backgroundColor: inputBg },
+              ]}
               value={docTitle}
-              onChangeText={setDocTitle}
+              onChangeText={(v) => { setDocTitle(v); setDocErrors((p) => ({ ...p, title: undefined })); }}
               placeholder="例：〇〇戦・打撃分析"
               placeholderTextColor={colors.icon}
               maxLength={200}
             />
+            <FieldError message={docErrors.title} />
           </View>
 
           {/* 投稿先 */}
@@ -376,8 +423,9 @@ export default function UploadScreen() {
               { id: "documents", name: "資料ページ" },
               { id: "scores", name: "練習映像ページ" },
             ]}
-            onSelect={(v) => { setDocPageType(v); setDocCategory(""); }}
+            onSelect={(v) => { setDocPageType(v); setDocCategory(""); setDocErrors((p) => ({ ...p, pageType: undefined })); }}
             required
+            error={docErrors.pageType}
           />
 
           {/* カテゴリ */}
@@ -386,9 +434,10 @@ export default function UploadScreen() {
             value={docCategory}
             placeholder={docPageType ? "カテゴリを選択" : "先に投稿先を選択"}
             options={docCategories.map((c) => ({ id: c.id, name: c.name }))}
-            onSelect={setDocCategory}
+            onSelect={(v) => { setDocCategory(v); setDocErrors((p) => ({ ...p, category: undefined })); }}
             disabled={!docPageType}
             required
+            error={docErrors.category}
           />
 
           {/* 選手 */}
@@ -415,7 +464,10 @@ export default function UploadScreen() {
               ファイル <Text style={{ color: "#ef4444" }}>*</Text>
             </Text>
             <TouchableOpacity
-              style={[styles.filePicker, { borderColor, backgroundColor: colorScheme === "dark" ? "#2c2c2e" : "#f9fafb" }]}
+              style={[
+                styles.filePicker,
+                { borderColor: docErrors.file ? "#ef4444" : borderColor, backgroundColor: inputBg },
+              ]}
               onPress={pickFile}
             >
               <Ionicons name="attach-outline" size={20} color={colors.tint} />
@@ -428,11 +480,12 @@ export default function UploadScreen() {
                 {((docFile.size ?? 0) / 1024 / 1024).toFixed(2)} MB
               </Text>
             )}
+            <FieldError message={docErrors.file} />
           </View>
 
           <TouchableOpacity
             style={[styles.submitBtn, { backgroundColor: colors.tint, opacity: uploadDocMutation.isPending ? 0.7 : 1 }]}
-            onPress={() => uploadDocMutation.mutate()}
+            onPress={() => { if (validateDoc()) uploadDocMutation.mutate(); }}
             disabled={uploadDocMutation.isPending}
           >
             {uploadDocMutation.isPending ? (
@@ -463,13 +516,17 @@ export default function UploadScreen() {
               タイトル <Text style={{ color: "#ef4444" }}>*</Text>
             </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor, backgroundColor: colorScheme === "dark" ? "#2c2c2e" : "#f9fafb" }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: videoErrors.title ? "#ef4444" : borderColor, backgroundColor: inputBg },
+              ]}
               value={videoTitle}
-              onChangeText={setVideoTitle}
+              onChangeText={(v) => { setVideoTitle(v); setVideoErrors((p) => ({ ...p, title: undefined })); }}
               placeholder="例：〇〇戦・守備練習"
               placeholderTextColor={colors.icon}
               maxLength={200}
             />
+            <FieldError message={videoErrors.title} />
           </View>
 
           {/* 投稿先 */}
@@ -481,8 +538,9 @@ export default function UploadScreen() {
               { id: "videos", name: "試合映像ページ" },
               { id: "scores", name: "練習映像ページ" },
             ]}
-            onSelect={(v) => { setVideoPageType(v); setVideoCategory(""); }}
+            onSelect={(v) => { setVideoPageType(v); setVideoCategory(""); setVideoErrors((p) => ({ ...p, pageType: undefined })); }}
             required
+            error={videoErrors.pageType}
           />
 
           {/* カテゴリ */}
@@ -491,9 +549,10 @@ export default function UploadScreen() {
             value={videoCategory}
             placeholder={videoPageType ? "カテゴリを選択" : "先に投稿先を選択"}
             options={videoCategories.map((c) => ({ id: c.id, name: c.name }))}
-            onSelect={setVideoCategory}
+            onSelect={(v) => { setVideoCategory(v); setVideoErrors((p) => ({ ...p, category: undefined })); }}
             disabled={!videoPageType}
             required
+            error={videoErrors.category}
           />
 
           {/* チーム1 */}
@@ -520,19 +579,23 @@ export default function UploadScreen() {
               YouTube URL <Text style={{ color: "#ef4444" }}>*</Text>
             </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor, backgroundColor: colorScheme === "dark" ? "#2c2c2e" : "#f9fafb" }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: videoErrors.url ? "#ef4444" : borderColor, backgroundColor: inputBg },
+              ]}
               value={videoUrl}
-              onChangeText={setVideoUrl}
+              onChangeText={(v) => { setVideoUrl(v); setVideoErrors((p) => ({ ...p, url: undefined })); }}
               placeholder="https://www.youtube.com/watch?v=..."
               placeholderTextColor={colors.icon}
               autoCapitalize="none"
               keyboardType="url"
             />
+            <FieldError message={videoErrors.url} />
           </View>
 
           <TouchableOpacity
             style={[styles.submitBtn, { backgroundColor: colors.tint, opacity: uploadVideoMutation.isPending ? 0.7 : 1 }]}
-            onPress={() => uploadVideoMutation.mutate()}
+            onPress={() => { if (validateVideo()) uploadVideoMutation.mutate(); }}
             disabled={uploadVideoMutation.isPending}
           >
             {uploadVideoMutation.isPending ? (
@@ -584,6 +647,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
+  },
+  fieldError: {
+    fontSize: 12,
+    color: "#ef4444",
   },
   selectBtn: {
     flexDirection: "row",
