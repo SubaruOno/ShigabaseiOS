@@ -1,6 +1,7 @@
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   FlatList,
   ActivityIndicator,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Redirect } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +37,7 @@ export default function ScoresScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>("batting");
   const [refreshing, setRefreshing] = useState(false);
+  const [searchText, setSearchText] = useState("");
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -96,7 +99,7 @@ export default function ScoresScreen() {
   const isLoading =
     activeTab === "weight" ? loadingWeight : loadingScoresVideos;
 
-  const data =
+  const rawData =
     activeTab === "batting"
       ? battingVideos
       : activeTab === "fielding"
@@ -104,6 +107,12 @@ export default function ScoresScreen() {
       : activeTab === "pitching"
       ? pitchingVideos
       : weightDocuments;
+
+  const data = searchText.trim()
+    ? rawData?.filter((item) =>
+        item.title?.toLowerCase().includes(searchText.toLowerCase())
+      )
+    : rawData;
 
   const emptyMessage =
     activeTab === "batting"
@@ -150,6 +159,17 @@ export default function ScoresScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      <View style={[styles.searchRow, { borderColor: colors.icon, backgroundColor: colors.cardBg }]}>
+        <Ionicons name="search" size={18} color={colors.icon} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="タイトルで検索"
+          placeholderTextColor={colors.icon}
+          value={searchText}
+          onChangeText={setSearchText}
+        />
       </View>
 
       {isLoading ? (
@@ -209,6 +229,17 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabText: { fontSize: 14, fontWeight: "500" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 12,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+  searchIcon: { marginRight: 6 },
+  searchInput: { flex: 1, height: 40, fontSize: 14 },
   list: { padding: 12 },
   // paddingBottom applied dynamically via insets
   empty: { textAlign: "center", marginTop: 40, fontSize: 14 },

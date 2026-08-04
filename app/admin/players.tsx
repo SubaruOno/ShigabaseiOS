@@ -20,16 +20,17 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 
-type AppRole = "player" | "analyst" | "admin";
+type AppRole = "player" | "analyst" | "admin" | "ob";
 type Tab = "players" | "roles" | "teams";
 
 const ROLE_LABELS: Record<AppRole, string> = {
   player: "選手",
   analyst: "アナリスト",
   admin: "管理者",
+  ob: "OB",
 };
 
-const ALL_ROLES: AppRole[] = ["player", "analyst", "admin"];
+const ALL_ROLES: AppRole[] = ["player", "analyst", "admin", "ob"];
 
 export default function AdminPlayersScreen() {
   const { user, hasRole } = useAuth();

@@ -12,12 +12,12 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "ホーム", headerShown: false }} />
-      <Tabs.Screen name="messages" options={{ title: "メッセージ" }} />
-      <Tabs.Screen name="weight" options={{ title: "ウエイト", href: null }} />
+      <Tabs.Screen name="documents" options={{ title: "資料" }} />
+      <Tabs.Screen name="videos" options={{ title: "映像" }} />
+      <Tabs.Screen name="messages" options={{ title: "メッセージ", href: null }} />
       <Tabs.Screen name="menu" options={{ title: "メニュー" }} />
       {/* タブバーには表示しないがルートとして保持 */}
-      <Tabs.Screen name="documents" options={{ title: "資料", href: null }} />
-      <Tabs.Screen name="videos" options={{ title: "動画", href: null }} />
+      <Tabs.Screen name="weight" options={{ title: "ウエイト", href: null }} />
     </Tabs>
   );
 }

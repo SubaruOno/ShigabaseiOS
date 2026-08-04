@@ -2,8 +2,8 @@ import { memo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 
-// 球種ごとの固定カラー
-const PITCH_COLOR: Record<string, string> = {
+// 球種ごとの固定カラー（外部からも参照できるようにexport）
+export const PITCH_COLOR: Record<string, string> = {
   ストレート:     "#ef4444",
   ツーシーム:     "#f97316",
   カットボール:   "#eab308",
@@ -19,7 +19,7 @@ const PITCH_COLOR: Record<string, string> = {
   特殊球:         "#6b7280",
 };
 
-const FALLBACK_COLORS = [
+export const FALLBACK_COLORS = [
   "#0ea5e9", "#d946ef", "#f59e0b", "#10b981", "#8b5cf6",
 ];
 
@@ -30,6 +30,7 @@ type Props = {
   subTextColor?: string;
   backgroundColor?: string;
   pieSize?: number;
+  showLegend?: boolean;
 };
 
 export const PitchTypePieChart = memo(function PitchTypePieChart({
@@ -39,6 +40,7 @@ export const PitchTypePieChart = memo(function PitchTypePieChart({
   subTextColor = "#666",
   backgroundColor = "#ffffff",
   pieSize = 130,
+  showLegend = true,
 }: Props) {
   const entries = Object.entries(byType)
     .sort((a, b) => b[1] - a[1])
@@ -94,22 +96,24 @@ export const PitchTypePieChart = memo(function PitchTypePieChart({
           )
         )}
       </Svg>
-      <View style={styles.legend}>
-        {entries.map((e) => (
-          <View key={e.label} style={styles.legendRow}>
-            <View style={[styles.dot, { backgroundColor: e.color }]} />
-            <Text
-              style={[styles.legendLabel, { color: textColor }]}
-              numberOfLines={1}
-            >
-              {e.label}
-            </Text>
-            <Text style={[styles.legendStat, { color: subTextColor }]}>
-              {e.count}球 ({e.pct}%)
-            </Text>
-          </View>
-        ))}
-      </View>
+      {showLegend && (
+        <View style={styles.legend}>
+          {entries.map((e) => (
+            <View key={e.label} style={styles.legendRow}>
+              <View style={[styles.dot, { backgroundColor: e.color }]} />
+              <Text
+                style={[styles.legendLabel, { color: textColor }]}
+                numberOfLines={1}
+              >
+                {e.label}
+              </Text>
+              <Text style={[styles.legendStat, { color: subTextColor }]}>
+                {e.count}球 ({e.pct}%)
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 });

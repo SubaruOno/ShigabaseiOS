@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, TouchableOpacity, StyleSheet, Text, Alert } from "react-native";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,14 +9,28 @@ import { supabase } from "@/lib/supabase";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
-type TabItem =
-  | { type: "tab"; name: string; icon: IoniconName }
-  | { type: "action"; key: string; icon: IoniconName; onPress: () => void };
+type TabItem = {
+  name: string;
+  icon: IoniconName;
+  activeIcon: IoniconName;
+  label: string;
+};
+
+const TAB_ITEMS: TabItem[] = [
+  { name: "index", icon: "home-outline", activeIcon: "home", label: "ホーム" },
+  { name: "documents", icon: "document-text-outline", activeIcon: "document-text", label: "資料" },
+  { name: "videos", icon: "play-circle-outline", activeIcon: "play-circle", label: "映像" },
+  { name: "menu", icon: "menu-outline", activeIcon: "menu", label: "メニュー" },
+];
+
+const ACTIVE_COLOR = "#0a7ea4";
+const INACTIVE_COLOR = "rgba(255,255,255,0.55)";
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { hasRole, user } = useAuth();
+  const currentRouteName = state.routes[state.index]?.name;
 
   const isAnalystOrAdmin = hasRole("analyst") || hasRole("admin");
   const isPlayer = hasRole("player");
@@ -35,120 +49,115 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     }
   };
 
-  const tabItems: TabItem[] = [
-    { type: "tab", name: "index", icon: "home" },
-    { type: "tab", name: "messages", icon: "chatbubble" },
-    ...(isAnalystOrAdmin
-      ? [
-          {
-            type: "action" as const,
-            key: "upload-action",
-            icon: "add-circle" as IoniconName,
-            onPress: () => router.push("/upload"),
-          },
-        ]
-      : []),
-    ...(isPlayer
-      ? [
-          {
-            type: "action" as const,
-            key: "stats-action",
-            icon: "stats-chart" as IoniconName,
-            onPress: handleMyStats,
-          },
-        ]
-      : []),
-    { type: "tab", name: "menu", icon: "menu" },
-  ];
+  // 左2・中央アクション・右2 で投稿を中央に配置
+  const leftTabs = TAB_ITEMS.slice(0, 2);
+  const rightTabs = TAB_ITEMS.slice(2);
 
-  const currentRouteName = state.routes[state.index]?.name;
+  const renderTab = (item: TabItem) => {
+    const isFocused = currentRouteName === item.name;
+    const onPress = () => {
+      const route = state.routes.find((r) => r.name === item.name);
+      if (!route) return;
+      const event = navigation.emit({
+        type: "tabPress",
+        target: route.key,
+        canPreventDefault: true,
+      });
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(item.name);
+      }
+    };
+    return (
+      <TouchableOpacity
+        key={item.name}
+        onPress={onPress}
+        style={styles.tab}
+        activeOpacity={0.7}
+        accessibilityLabel={item.label}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+      >
+        <Ionicons
+          name={isFocused ? item.activeIcon : item.icon}
+          size={scale(24)}
+          color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
+        />
+        <Text style={[styles.label, isFocused && styles.labelActive]}>
+          {item.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: insets.bottom + 8 }]}>
-      <View style={styles.pill}>
-        {tabItems.map((item, i) => {
-          if (item.type === "action") {
-            return (
-              <TouchableOpacity
-                key={item.key}
-                onPress={item.onPress}
-                style={styles.tab}
-                activeOpacity={0.7}
-              >
-                <View style={styles.iconWrap}>
-                  <Ionicons name={item.icon} size={scale(22)} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            );
-          }
+    <View style={[styles.bar, { paddingBottom: (insets.bottom || 8) + 4 }]}>
+      {leftTabs.map(renderTab)}
 
-          const isFocused = currentRouteName === item.name;
+      {/* 中央スロット */}
+      {isAnalystOrAdmin ? (
+        // analyst/admin: 丸い投稿ボタン
+        <TouchableOpacity
+          style={styles.tab}
+          onPress={() => router.push("/upload")}
+          activeOpacity={0.8}
+          accessibilityLabel="投稿"
+        >
+          <View style={styles.actionBtn}>
+            <Ionicons name="add" size={scale(26)} color="#fff" />
+          </View>
+          <Text style={styles.label}>投稿</Text>
+        </TouchableOpacity>
+      ) : isPlayer ? (
+        // player: 普通のタブとして成績
+        <TouchableOpacity
+          style={styles.tab}
+          onPress={handleMyStats}
+          activeOpacity={0.7}
+          accessibilityLabel="成績"
+        >
+          <Ionicons name="stats-chart-outline" size={scale(24)} color={INACTIVE_COLOR} />
+          <Text style={styles.label}>成績</Text>
+        </TouchableOpacity>
+      ) : null /* OB・その他: 中央スロットなし（4タブ構成） */}
 
-          const onPress = () => {
-            const route = state.routes.find((r) => r.name === item.name);
-            if (!route) return;
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(item.name);
-            }
-          };
-
-          return (
-            <TouchableOpacity
-              key={item.name}
-              onPress={onPress}
-              style={styles.tab}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[styles.iconWrap, isFocused && styles.iconWrapActive]}
-              >
-                <Ionicons name={item.icon} size={scale(22)} color="#fff" />
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {rightTabs.map(renderTab)}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    backgroundColor: "transparent",
-  },
-  pill: {
-    backgroundColor: "#3a4556",
-    borderRadius: 999,
+  bar: {
+    backgroundColor: "#1c2333",
     flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 12,
   },
   tab: {
     flex: 1,
     alignItems: "center",
+    gap: 3,
   },
-  iconWrap: {
+  label: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: INACTIVE_COLOR,
+  },
+  labelActive: {
+    color: ACTIVE_COLOR,
+    fontWeight: "600",
+  },
+  actionBtn: {
     width: scale(44),
     height: scale(44),
     borderRadius: scale(22),
-    backgroundColor: "#4a5566",
+    backgroundColor: ACTIVE_COLOR,
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconWrapActive: {
-    backgroundColor: "#0a7ea4",
   },
 });

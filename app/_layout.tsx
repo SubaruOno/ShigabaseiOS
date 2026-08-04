@@ -125,6 +125,26 @@ function AppLayout() {
           name="weight-export"
           options={{ title: "データ出力", headerBackTitle: "戻る" }}
         />
+        <Stack.Screen
+          name="bullpen/index"
+          options={{ title: "ブルペン", headerBackTitle: "戻る" }}
+        />
+        <Stack.Screen
+          name="bullpen/[id]"
+          options={{ headerBackTitle: "戻る" }}
+        />
+        <Stack.Screen
+          name="bullpen/record"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="opponent-pitchers/index"
+          options={{ title: "相手投手", headerBackTitle: "戻る" }}
+        />
+        <Stack.Screen
+          name="opponent-pitchers/[name]"
+          options={{ headerBackTitle: "戻る" }}
+        />
       </Stack>
       <StatusBar style="auto" />
       <ForceUpdateModal visible={needsUpdate} />

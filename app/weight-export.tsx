@@ -508,6 +508,65 @@ const pk = StyleSheet.create({
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
+// ─── PlayerPicker ─────────────────────────────────────────────────────────────
+
+function PlayerPicker({ players, selectedIds, onChange, colors, colorScheme }: {
+  players: Player[];
+  selectedIds: Set<string>;
+  onChange: (ids: Set<string>) => void;
+  colors: (typeof Colors)["light"];
+  colorScheme: "light" | "dark";
+}) {
+  const [visible, setVisible] = useState(false);
+  const allSelected = selectedIds.size === 0;
+  const label = allSelected ? "全員" : `${selectedIds.size}名選択中`;
+
+  const toggle = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
+  return (
+    <View style={pk.wrap}>
+      <Text style={[pk.label, { color: colors.icon }]}>選手</Text>
+      <TouchableOpacity
+        style={[pk.btn, { borderColor: colors.borderColor, backgroundColor: colors.cardBg }]}
+        onPress={() => setVisible(true)}>
+        <Text style={[pk.btnText, { color: colors.text }]}>{label}</Text>
+        <Ionicons name="chevron-down" size={14} color={colors.icon} />
+      </TouchableOpacity>
+
+      <Modal visible={visible} transparent animationType="slide">
+        <TouchableOpacity style={pk.overlay} onPress={() => setVisible(false)} />
+        <View style={[pk.sheet, { backgroundColor: colorScheme === "dark" ? "#2c2c2e" : "#fff" }]}>
+          <Text style={[pk.sheetTitle, { color: colors.text }]}>選手を選択</Text>
+          <ScrollView>
+            <TouchableOpacity
+              style={[pk.item, { borderBottomColor: colors.borderColor }]}
+              onPress={() => { onChange(new Set()); setVisible(false); }}>
+              <Text style={[pk.itemText, { color: allSelected ? colors.tint : colors.text }]}>全員</Text>
+              {allSelected && <Ionicons name="checkmark" size={16} color={colors.tint} />}
+            </TouchableOpacity>
+            {players.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[pk.item, { borderBottomColor: colors.borderColor }]}
+                onPress={() => toggle(p.id)}>
+                <Text style={[pk.itemText, { color: selectedIds.has(p.id) ? colors.tint : colors.text }]}>
+                  {p.name}
+                </Text>
+                {selectedIds.has(p.id) && <Ionicons name="checkmark" size={16} color={colors.tint} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 export default function WeightExportScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
@@ -515,6 +574,7 @@ export default function WeightExportScreen() {
 
   const [fromMonth, setFromMonth] = useState(monthOptions[0].value);
   const [toMonth, setToMonth] = useState(monthOptions[monthOptions.length - 1].value);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
 
   const { data: players = [] } = useQuery<Player[]>({
@@ -542,11 +602,25 @@ export default function WeightExportScreen() {
   const fromLabel = monthOptions.find((o) => o.value === fromMonth)?.label ?? fromMonth;
   const toLabel = monthOptions.find((o) => o.value === toMonth)?.label ?? toMonth;
 
+  const filteredSessions = useMemo(() =>
+    selectedPlayerIds.size === 0
+      ? sessions
+      : sessions.filter((s) => selectedPlayerIds.has(s.player_id)),
+    [sessions, selectedPlayerIds]
+  );
+
+  const filteredPlayers = useMemo(() =>
+    selectedPlayerIds.size === 0
+      ? players
+      : players.filter((p) => selectedPlayerIds.has(p.id)),
+    [players, selectedPlayerIds]
+  );
+
   const handleXLSX = async () => {
-    if (!sessions.length) { Alert.alert("データなし", "該当期間にデータがありません"); return; }
+    if (!filteredSessions.length) { Alert.alert("データなし", "該当期間にデータがありません"); return; }
     setExporting("csv");
     try {
-      const b64 = generateXLSX(sessions, players);
+      const b64 = generateXLSX(filteredSessions, filteredPlayers);
       const path = `${FileSystem.cacheDirectory}weight_records_${fromMonth}_${toMonth}.xlsx`;
       await FileSystem.writeAsStringAsync(path, b64, { encoding: "base64" });
       await Sharing.shareAsync(path, {
@@ -561,10 +635,10 @@ export default function WeightExportScreen() {
   };
 
   const handlePDF = async () => {
-    if (!sessions.length) { Alert.alert("データなし", "該当期間にデータがありません"); return; }
+    if (!filteredSessions.length) { Alert.alert("データなし", "該当期間にデータがありません"); return; }
     setExporting("pdf");
     try {
-      const html = generatePDFHTML(sessions, players, fromLabel, toLabel);
+      const html = generatePDFHTML(filteredSessions, filteredPlayers, fromLabel, toLabel);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       const dest = `${FileSystem.cacheDirectory}weight_report_${fromMonth}_${toMonth}.pdf`;
       await FileSystem.moveAsync({ from: uri, to: dest });
@@ -592,6 +666,21 @@ export default function WeightExportScreen() {
         </View>
       </View>
 
+      {/* 選手選択 */}
+      <View style={[s.card, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
+        <View style={s.cardHeader}>
+          <Ionicons name="people-outline" size={18} color={colors.tint} />
+          <Text style={[s.cardTitle, { color: colors.text }]}>選手選択</Text>
+        </View>
+        <PlayerPicker
+          players={players}
+          selectedIds={selectedPlayerIds}
+          onChange={setSelectedPlayerIds}
+          colors={colors}
+          colorScheme={colorScheme}
+        />
+      </View>
+
       {/* 件数プレビュー */}
       <View style={[s.card, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
         <View style={s.cardHeader}>
@@ -601,7 +690,7 @@ export default function WeightExportScreen() {
         {isLoading
           ? <ActivityIndicator color={colors.tint} />
           : <Text style={[s.countText, { color: colors.text }]}>
-              {sessions.length} 件 / {new Set(sessions.map((s) => s.player_id)).size} 名
+              {filteredSessions.length} 件 / {new Set(filteredSessions.map((s) => s.player_id)).size} 名
             </Text>
         }
       </View>

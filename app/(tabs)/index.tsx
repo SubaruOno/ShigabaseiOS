@@ -20,12 +20,11 @@ const CALENDAR_ID = "shigauni.bbc@gmail.com";
 const CALENDAR_URL = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}&ctz=Asia%2FTokyo&hl=ja&mode=AGENDA&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0`;
 
 const categoryCards = [
-  { title: "資料", subtitle: "対策資料・試合レポート", icon: "document-text", path: "/(tabs)/documents", color: "#3b82f6" },
-  { title: "試合映像", subtitle: "試合・練習映像", icon: "play-circle", path: "/(tabs)/videos", color: "#8b5cf6" },
+  { title: "試合結果", subtitle: "投球・打撃データ分析", icon: "stats-chart", path: "/game-analysis", color: "#ef4444" },
   { title: "ウエイト記録", subtitle: "トレーニング記録・チーム分析", icon: "barbell", path: "/(tabs)/weight", color: "#f59e0b" },
   { title: "練習映像", subtitle: "打撃・守備・ウエイト", icon: "trending-up", path: "/scores", color: "#10b981" },
-  { title: "試合結果", subtitle: "投球・打撃データ分析", icon: "stats-chart", path: "/game-analysis", color: "#ef4444" },
-  { title: "データ分析", subtitle: "打撃・投球 チーム分析", icon: "analytics", path: "/analytics", color: "#6366f1" },
+  { title: "ブルペン", subtitle: "投球データ記録・分析", icon: "baseball-outline", path: "/bullpen", color: "#14b8a6" },
+  { title: "相手投手", subtitle: "球種・球速帯チェック", icon: "person-circle-outline", path: "/opponent-pitchers", color: "#f97316" },
 ] as const;
 
 function HeroHeader() {

@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import { Alert } from "react-native";
 
-type AppRole = "player" | "analyst" | "admin";
+type AppRole = "player" | "analyst" | "admin" | "ob";
 
 interface AuthContextType {
   user: User | null;
