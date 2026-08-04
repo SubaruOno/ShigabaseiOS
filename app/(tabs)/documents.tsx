@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { ContentCard } from "@/components/content-card";
+import { EmptyState } from "@/components/empty-state";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 
@@ -370,9 +371,11 @@ export default function DocumentsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           ListEmptyComponent={
-            <Text style={[styles.empty, { color: colors.icon }]}>
-              資料がまだ登録されていません
-            </Text>
+            <EmptyState
+              icon="document-text-outline"
+              title="資料がまだありません"
+              subtitle="アナリストが資料をアップロードすると表示されます"
+            />
           }
         />
       )}

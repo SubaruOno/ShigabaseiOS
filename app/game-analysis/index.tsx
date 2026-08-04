@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { formatDate } from "@/lib/format-date";
+import { EmptyState } from "@/components/empty-state";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
@@ -525,17 +526,11 @@ export default function GameAnalysisScreen() {
             ) : null
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="baseball-outline" size={48} color={colors.icon} />
-              <Text style={[styles.emptyText, { color: colors.icon }]}>
-                試合データがありません
-              </Text>
-              {isAdmin && (
-                <Text style={[styles.emptyHint, { color: colors.icon }]}>
-                  右上のアイコンからExcelを取り込んでください
-                </Text>
-              )}
-            </View>
+            <EmptyState
+              icon="baseball-outline"
+              title="試合データがありません"
+              subtitle={isAdmin ? "右上のアイコンからExcelを取り込んでください" : undefined}
+            />
           }
         />
       )}

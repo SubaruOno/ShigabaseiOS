@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
+import { EmptyState } from "@/components/empty-state";
 
 type Player = { id: string; name: string; uniform_number: number | null };
 type Session = { id: string; player_id: string; date: string };
@@ -74,9 +75,11 @@ export default function BullpenIndex() {
           <ActivityIndicator size="large" color={colors.tint} />
         </View>
       ) : players.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={{ color: colors.icon }}>選手データがありません</Text>
-        </View>
+        <EmptyState
+          icon="people-outline"
+          title="選手データがありません"
+          subtitle="管理者が選手を登録すると表示されます"
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={[styles.card, { backgroundColor: cardBg }]}>

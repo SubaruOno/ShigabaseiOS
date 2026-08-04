@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { ContentCard } from "@/components/content-card";
+import { EmptyState } from "@/components/empty-state";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -358,9 +359,11 @@ export default function VideosScreen() {
             />
           )}
           ListEmptyComponent={
-            <Text style={[styles.empty, { color: colors.icon }]}>
-              動画がまだ登録されていません
-            </Text>
+            <EmptyState
+              icon="play-circle-outline"
+              title="動画がまだありません"
+              subtitle="アナリストが動画を登録すると表示されます"
+            />
           }
         />
       )}

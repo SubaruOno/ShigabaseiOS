@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { EmptyState } from "@/components/empty-state";
 
 function formatTime(timestamp: string) {
   const date = new Date(timestamp);
@@ -220,24 +221,11 @@ export default function MessagesScreen() {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons
-                name="chatbubble-outline"
-                size={64}
-                color={colors.icon}
-              />
-              <Text style={[styles.emptyText, { color: colors.icon }]}>
-                まだメッセージがありません
-              </Text>
-              <TouchableOpacity
-                style={[styles.emptyBtn, { backgroundColor: colors.tint }]}
-                onPress={() => setShowNewChat(true)}
-              >
-                <Text style={styles.emptyBtnText}>
-                  新しいメッセージを開始
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <EmptyState
+              icon="chatbubble-outline"
+              title="まだメッセージがありません"
+              action={{ label: "新しいメッセージを開始", onPress: () => setShowNewChat(true) }}
+            />
           }
         />
       )}
