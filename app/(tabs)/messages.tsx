@@ -108,9 +108,8 @@ export default function MessagesScreen() {
     enabled: !!user,
   });
 
-  if (!user) return <Redirect href="/login" />;
-
   const startConversation = useCallback(async (otherUserId: string) => {
+    if (!user) return;
     const [small, large] = [user.id, otherUserId].sort();
     const { data: existing } = await supabase
       .from("conversations")
@@ -134,6 +133,8 @@ export default function MessagesScreen() {
     }
     setShowNewChat(false);
   }, [user, queryClient]);
+
+  if (!user) return <Redirect href="/login" />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
