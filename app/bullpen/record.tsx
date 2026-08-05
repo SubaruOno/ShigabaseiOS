@@ -109,6 +109,20 @@ export default function BullpenRecord() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const summary = useMemo(() => {
+    const strikes = pitches.filter((p) => p.is_strike).length;
+    const total = pitches.length;
+    const byType = new Map<string, { count: number; strikes: number; speeds: number[] }>();
+    for (const p of pitches) {
+      const t = byType.get(p.pitch_type) ?? { count: 0, strikes: 0, speeds: [] };
+      t.count++;
+      if (p.is_strike) t.strikes++;
+      if (p.pitch_speed != null) t.speeds.push(p.pitch_speed);
+      byType.set(p.pitch_type, t);
+    }
+    return { strikes, total, byType };
+  }, [pitches]);
+
   if (!user) return <Redirect href="/login" />;
 
   if (!canRecord) {
@@ -178,20 +192,6 @@ export default function BullpenRecord() {
       setSaving(false);
     }
   };
-
-  const summary = useMemo(() => {
-    const strikes = pitches.filter((p) => p.is_strike).length;
-    const total = pitches.length;
-    const byType = new Map<string, { count: number; strikes: number; speeds: number[] }>();
-    for (const p of pitches) {
-      const t = byType.get(p.pitch_type) ?? { count: 0, strikes: 0, speeds: [] };
-      t.count++;
-      if (p.is_strike) t.strikes++;
-      if (p.pitch_speed != null) t.speeds.push(p.pitch_speed);
-      byType.set(p.pitch_type, t);
-    }
-    return { strikes, total, byType };
-  }, [pitches]);
 
   // ━━━━━ Step 1: 選手選択 ━━━━━
   if (step === "player") {

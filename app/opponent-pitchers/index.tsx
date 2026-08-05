@@ -143,8 +143,6 @@ export default function OpponentPitchersScreen() {
     enabled: !!user,
   });
 
-  if (!user) return <Redirect href="/login" />;
-
   const teams = useMemo(() => {
     const set = new Set<string>();
     for (const p of data ?? []) {
@@ -159,6 +157,8 @@ export default function OpponentPitchersScreen() {
     if (search.trim()) list = list.filter((p) => p.name.includes(search.trim()));
     return list;
   }, [data, teamFilter, search]);
+
+  if (!user) return <Redirect href="/login" />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
