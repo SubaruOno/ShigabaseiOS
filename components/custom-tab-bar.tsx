@@ -3,7 +3,7 @@ import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scale } from "@/lib/scale";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 
@@ -27,19 +27,29 @@ const ACTIVE_COLOR = "#0a7ea4";
 const INACTIVE_COLOR = "rgba(255,255,255,0.55)";
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+  console.log("[CTB] render start, routes:", state?.routes?.length, "index:", state?.index);
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  console.log("[CTB] after useSafeAreaInsets");
   const { hasRole, user } = useAuth();
+  console.log("[CTB] after useAuth, user:", user?.id ?? "null");
+
+  if (!state?.routes?.length) return null;
   const currentRouteName = state.routes[state.index]?.name;
+  console.log("[CTB] currentRoute:", currentRouteName);
 
   const isAnalystOrAdmin = hasRole("analyst") || hasRole("admin");
   const isPlayer = hasRole("player");
+  console.log("[CTB] roles — isAnalyst:", isAnalystOrAdmin, "isPlayer:", isPlayer);
 
   const handleMyStats = async () => {
+    if (!user) {
+      Alert.alert("エラー", "ログインしてください");
+      return;
+    }
     const { data: player } = await supabase
       .from("players")
       .select("name, excel_name")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .maybeSingle();
     if (player) {
       const name = (player.excel_name as string | null) ?? (player.name as string);

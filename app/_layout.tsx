@@ -37,13 +37,18 @@ if (Constants.isDevice) {
 }
 
 function AppLayout() {
+  console.log("[AppLayout] render start");
   const colorScheme = useColorScheme();
   const router = useRouter();
+  console.log("[AppLayout] after useRouter");
   const { needsUpdate } = useForceUpdate();
+  console.log("[AppLayout] after useForceUpdate");
 
   usePushNotifications();
+  console.log("[AppLayout] after usePushNotifications");
 
   const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  console.log("[AppLayout] after useLastNotificationResponse:", !!lastNotificationResponse);
 
   useEffect(() => {
     if (!lastNotificationResponse) return;
