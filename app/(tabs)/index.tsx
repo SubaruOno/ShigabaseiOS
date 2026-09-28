@@ -24,6 +24,7 @@ const CALENDAR_URL = `https://calendar.google.com/calendar/embed?src=${encodeURI
 const HERO_RATIO = 2.36;
 
 const categoryCards = [
+  { title: "試合記録", subtitle: "試合の作成・スコア入力", icon: "create", path: "/scoring", color: "#0a7ea4", roles: ["analyst", "admin"] },
   { title: "試合結果", subtitle: "投球・打撃データ分析", icon: "stats-chart", path: "/game-analysis", color: "#ef4444" },
   { title: "ウエイト記録", subtitle: "トレーニング記録・チーム分析", icon: "barbell", path: "/(tabs)/weight", color: "#f59e0b" },
   { title: "練習映像", subtitle: "打撃・守備・ウエイト", icon: "trending-up", path: "/scores", color: "#10b981" },
@@ -55,7 +56,7 @@ function HeroHeader() {
 export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, hasRole } = useAuth();
   const { isWide } = useLayout();
 
   if (isLoading) {
@@ -81,7 +82,7 @@ export default function HomeScreen() {
       <View style={[styles.body, isWide && styles.bodyWide]}>
         {/* カテゴリカード */}
         <View style={[styles.menuCard, { backgroundColor: cardBg }, isWide && styles.column]}>
-          {categoryCards.map((card, index) => (
+          {categoryCards.filter((card: any) => !card.roles || card.roles.some((r: "analyst" | "admin") => hasRole(r))).map((card, index) => (
             <TouchableOpacity
               key={card.title}
               style={[

@@ -77,3 +77,20 @@ export function checkCommit(st: GameState, p: Page): string | null {
   return null;
 }
 export function stateAt(index: number, pages: Page[], teams: TeamSetup[] = DEFAULT_TEAMS, includePre = false): GameState { const st = initState(teams); for (let i = 0; i < index; i++) applyPage(st, pages[i]); if (includePre && pages[index]) applyPre(st, pages[index]); return st; }
+
+export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;roster_player_id:string;position_id:number;batting_hand?:string|null;throwing_hand?:string|null;uniform_no?:string|null;player_snapshot?:{uniform_no?:number|string;bat_hand?:string;throw_hand?:string;name?:string}}>, teamIds:[string,string], teamNames:[string,string]): TeamSetup[] {
+  return teamIds.map((teamId, index) => {
+    const rows=lineup.filter(row=>row.team_id===teamId).sort((a,b)=>a.slot-b.slot);
+    const order=Array.from({length:9},(_,slot)=>{
+      const row=rows.find(item=>item.slot===slot+1);
+      const raw=row?.uniform_no??row?.player_snapshot?.uniform_no;
+      const number=Number(raw);
+      return Number.isFinite(number)&&number>0?number:slot+1;
+    });
+    const positions=Array.from({length:9},(_,slot)=>rows.find(item=>item.slot===slot+1)?.position_id??(slot===0?1:10));
+    const bats=Array.from({length:9},(_,slot)=>{const h=rows.find(item=>item.slot===slot+1)?.batting_hand??rows.find(item=>item.slot===slot+1)?.player_snapshot?.bat_hand;return h==='L'?'左':h==='S'?'両':'右' as Hand});
+    const p=rows.find(item=>item.slot===10);const pitchNo=Number(p?.uniform_no??p?.player_snapshot?.uniform_no??order[0]);
+    const throws=(p?.throwing_hand??p?.player_snapshot?.throw_hand)==='L'?'左':'右' as Hand;
+    return {name:teamNames[index],order,pos:positions,bats,P:Number.isFinite(pitchNo)?pitchNo:order[0],throws};
+  });
+}
