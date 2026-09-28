@@ -9,7 +9,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Keyboard,
 } from "react-native";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -145,8 +144,9 @@ function WeightLineChart({ data, color, goalValue, emptyText, colors }: {
   emptyText?: string;
   colors: (typeof Colors)["light"];
 }) {
-  const { width } = Dimensions.get("window");
-  const chartWidth = width - 72;
+  // 画面幅からの見積もりではカードからはみ出すため、実際に置かれた幅を測る（回転時も測り直される）
+  const [boxWidth, setBoxWidth] = useState(0);
+  const chartWidth = Math.max(0, boxWidth - Y_AXIS_LABEL_WIDTH - 8);
 
   if (!data.length) {
     return (
@@ -175,10 +175,12 @@ function WeightLineChart({ data, color, goalValue, emptyText, colors }: {
     : {};
 
   return (
-    <View style={{ marginLeft: -8 }}>
+    <View onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
+      {boxWidth > 0 && (
       <LineChart
         data={data}
         width={chartWidth}
+        yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
         height={160}
         spacing={spacing}
         color={color}
@@ -198,9 +200,13 @@ function WeightLineChart({ data, color, goalValue, emptyText, colors }: {
         hideDataPoints={data.length > 12}
         {...refLineProps}
       />
+      )}
     </View>
   );
 }
+
+// グラフ左の目盛り文字の幅
+const Y_AXIS_LABEL_WIDTH = 32;
 
 const chartStyles = StyleSheet.create({
   empty: { height: 80, justifyContent: "center", alignItems: "center" },

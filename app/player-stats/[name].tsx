@@ -135,7 +135,9 @@ export default function PlayerStatsScreen() {
   const { user } = useAuth();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
-  const { isWide } = useLayout();
+  // 円グラフ(約320)とコース図(最大360)が並ぶ幅があれば左右に並べる。iPadは縦向きでも並ぶ
+  const { width } = useLayout();
+  const chartsSideBySide = width >= 720;
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>("batting");
   const [filters, setFilters] = useState<Filters>({ year: null, season: null, kind: null, gameIds: null });
@@ -877,10 +879,10 @@ export default function PlayerStatsScreen() {
               )}
 
               {/* 広い画面では円グラフとコース図を左右に並べる */}
-              <View style={isWide ? styles.chartsWide : undefined}>
+              <View style={chartsSideBySide ? styles.chartsWide : undefined}>
                 {/* 球種円グラフ */}
                 {Object.keys(pitchingStats.byType).length > 0 && (
-                  <View style={isWide ? styles.chartsWideItem : undefined}>
+                  <View style={chartsSideBySide ? styles.chartsWideItem : undefined}>
                     <PitchTypePieChart
                       byType={pitchingStats.byType}
                       total={pitchingStats.pitches}
@@ -892,7 +894,7 @@ export default function PlayerStatsScreen() {
                 )}
 
                 {/* 投球コースチャート */}
-                <View style={isWide ? styles.chartsWideItem : undefined}>
+                <View style={chartsSideBySide ? styles.chartsWideItem : undefined}>
                   <PitchLocationChart
                     pitches={filteredPitching}
                     textColor={colors.text}

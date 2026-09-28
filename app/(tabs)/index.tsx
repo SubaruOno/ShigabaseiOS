@@ -20,6 +20,9 @@ import { useLayout } from "@/hooks/use-layout";
 const CALENDAR_ID = "shigauni.bbc@gmail.com";
 const CALENDAR_URL = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}&ctz=Asia%2FTokyo&hl=ja&mode=AGENDA&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0`;
 
+// ヘッダー画像(3168x1344)の横縦比
+const HERO_RATIO = 2.36;
+
 const categoryCards = [
   { title: "試合結果", subtitle: "投球・打撃データ分析", icon: "stats-chart", path: "/game-analysis", color: "#ef4444" },
   { title: "ウエイト記録", subtitle: "トレーニング記録・チーム分析", icon: "barbell", path: "/(tabs)/weight", color: "#f59e0b" },
@@ -31,14 +34,13 @@ const categoryCards = [
 function HeroHeader() {
   const insets = useSafeAreaInsets();
   const { width, isLandscape } = useLayout();
-  // 横向きでは画像の比率のままだと画面の半分近くを占めるので、高さを抑える
-  // 切り取ると文字が欠けるので、画像全体を収めて左右は画像の端と同じ紺色で埋める
-  const heroStyle = isLandscape
-    ? { aspectRatio: undefined, height: Math.min(width / 2.36, 220), backgroundColor: "#082849" }
-    : null;
+  // 高さは向きごとに直接計算する（aspectRatioの付け外しは縦に戻したとき反映されないため）。
+  // 横向きでは画像の比率のままだと画面の半分近くを占めるので高さを抑え、
+  // 切り取ると文字が欠けるので画像全体を収めて、左右は画像の端と同じ紺色で埋める
+  const heroHeight = isLandscape ? Math.min(width / HERO_RATIO, 220) : width / HERO_RATIO;
 
   return (
-    <View style={[styles.heroWrapper, heroStyle]}>
+    <View style={[styles.heroWrapper, { height: heroHeight }, isLandscape && styles.heroLandscape]}>
       <Image
         source={require("@/assets/images/header.png")}
         style={styles.heroBg}
@@ -140,9 +142,9 @@ const styles = StyleSheet.create({
   /* ヒーローヘッダー */
   heroWrapper: {
     width: "100%",
-    aspectRatio: 2.36,
     overflow: "hidden",
   },
+  heroLandscape: { backgroundColor: "#082849" },
   heroBg: {
     position: "absolute",
     width: "100%",

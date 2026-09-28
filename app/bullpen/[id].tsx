@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, Stack, Redirect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -94,7 +94,8 @@ function TrendChart({
   textColor: string;
   lineColor: string;
 }) {
-  const W = Dimensions.get("window").width - 64;
+  // 画面の回転に追従させるためフックで幅を取る
+  const W = useWindowDimensions().width - 64;
   const H = 170;
   const PAD = { t: 12, r: 12, b: 44, l: 40 };
   const cW = W - PAD.l - PAD.r;
