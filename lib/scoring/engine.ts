@@ -73,7 +73,7 @@ export function checkCommit(st: GameState, p: Page): string | null {
   if (!p.res && !p.skip && !p.pickoff_throw_to) return '入力がありません';
   if (p.res?.kind === 'FO' && !p.feature) return '打球の質を選択してください';
   const lineup = st.lu[st.half]; if (lineup.bats[st.bi[st.half]] === '両' && !p.handB && p.res?.kind !== 'IBB' && !p.pickoff_throw_to) return '右打席・左打席を選んでください';
-  if (p.res) { const k = p.res.kind, m = moves(st, p)[0], ended = m && (m.out || m.to); if (((k === 'S' && st.s >= 2) || k === 'sf' || k === 'io') && !ended) return '打席結果（アウトまたは進塁）を入力してください'; }
+  if (p.res) { const k = p.res.kind, m = moves(st, p)[0], ended = m && (m.out || m.to); if (((k === 'S' && st.s >= 2) || k === 'sf' || k === 'io' || (k === 'S' && st.s + 1 >= 3)) && !ended) return '打席結果（アウトまたは進塁）を入力してください'; }
   return null;
 }
 export function stateAt(index: number, pages: Page[], teams: TeamSetup[] = DEFAULT_TEAMS, includePre = false): GameState { const st = initState(teams); for (let i = 0; i < index; i++) applyPage(st, pages[i]); if (includePre && pages[index]) applyPre(st, pages[index]); return st; }
@@ -83,13 +83,13 @@ export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;r
     const rows=lineup.filter(row=>row.team_id===teamId).sort((a,b)=>a.slot-b.slot);
     const order=Array.from({length:9},(_,slot)=>{
       const row=rows.find(item=>item.slot===slot+1);
-      const raw=row?.uniform_no??row?.player_snapshot?.uniform_no;
+      const raw=row?.uniform_no??row?.player_snapshot?.uniform_no??row?.player_snapshot?.show_index;
       const number=Number(raw);
       return Number.isFinite(number)&&number>0?number:slot+1;
     });
     const positions=Array.from({length:9},(_,slot)=>rows.find(item=>item.slot===slot+1)?.position_id??(slot===0?1:10));
     const bats=Array.from({length:9},(_,slot)=>{const h=rows.find(item=>item.slot===slot+1)?.batting_hand??rows.find(item=>item.slot===slot+1)?.player_snapshot?.bat_hand;return h==='L'?'左':h==='S'?'両':'右' as Hand});
-    const p=rows.find(item=>item.slot===10);const pitchNo=Number(p?.uniform_no??p?.player_snapshot?.uniform_no??order[0]);
+    const p=rows.find(item=>item.slot===10);const pitchNo=Number(p?.uniform_no??p?.player_snapshot?.uniform_no??p?.player_snapshot?.show_index??order[0]);
     const throws=(p?.throwing_hand??p?.player_snapshot?.throw_hand)==='L'?'左':'右' as Hand;
     return {name:teamNames[index],order,pos:positions,bats,P:Number.isFinite(pitchNo)?pitchNo:order[0],throws};
   });

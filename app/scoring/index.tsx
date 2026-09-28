@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +20,10 @@ export default function ScoringHome() {
   const [masters, setMasters] = useState<any[]>([]);
   const [masterTab, setMasterTab] = useState<(typeof masterTabs)[number]>("チーム");
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [retiredVisible, setRetiredVisible] = useState(false);
+  const [draft, setDraft] = useState<any>(null);
+  const [playersForCreate, setPlayersForCreate] = useState<any[]>([]);
   const allowed = hasRole("analyst") || hasRole("admin");
   const refresh = async () => {
     setGames(await localStore.games());
@@ -63,29 +67,34 @@ export default function ScoringHome() {
     } catch (e) { Alert.alert("同期できません", String(e)); } finally { setBusy(false); }
   };
   const startGame = async () => {
-    const [{ data: teams }, { data: stadiums }, { data: weather }, { data: players }] = await Promise.all([
+    const [{ data: teamRows }, { data: stadiums }, { data: weather }, { data: players }] = await Promise.all([
       supabase.from("opponent_teams").select("id,name,is_own_team").order("display_order"),
       supabase.from("scoring_stadiums").select("id,name").limit(100),
       supabase.from("scoring_weather").select("id,name").order("show_index"),
-      supabase.from("scoring_roster_players").select("id,name,team_id,primary_position_id,bat_hand,throw_hand"),
+      supabase.from("scoring_roster_players").select("id,name,team_id,primary_position_id,bat_hand,throw_hand,retired,show_index").order("show_index"),
     ]);
-    if (!teams || teams.length < 2) { Alert.alert("チームがありません", "先にマスタ管理でチームを登録してください"); return; }
-    const now = new Date(); const pad = (n: number) => String(n).padStart(2, "0");
-    const iso = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`; const tm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const own = teams.find(t => t.is_own_team) ?? teams[0]; const away = teams.find(t => t.id !== own.id)!;
-    const id = newId();
-    const displayNo=`${iso.replaceAll("-", "")}${tm.replace(":", "")}`;
-    const season=String(now.getFullYear());const kind="練習試合";const week="1";const day="1";const gameNumber=1;
-    const lineup:any[]=[];
-    for(const team of [own,away]){
-      const candidates=(players??[]).filter(p=>p.team_id===team.id);
-      const chosen=candidates.slice(0,9);
-      for(let slot=0;slot<chosen.length;slot++){const pl=chosen[slot];lineup.push({team_id:team.id,slot:slot+1,roster_player_id:pl.id,position_id:pl.primary_position_id??(slot===0?1:10),batting_hand:pl.bat_hand,throwing_hand:pl.throw_hand,uniform_no:String(slot+1),player_snapshot:pl})}
-      const pitcher=chosen.find(p=>p.primary_position_id===1)??chosen[0];if(pitcher)lineup.push({team_id:team.id,slot:10,roster_player_id:pitcher.id,position_id:1,batting_hand:pitcher.bat_hand,throwing_hand:pitcher.throw_hand,uniform_no:"1",player_snapshot:pitcher});
-    }
-    const game: LocalGame = { id, display_game_number: displayNo, game_date: iso, game_time: tm, stadium_id: stadiums?.[0]?.id ?? null, home_team_id: own.id, away_team_id: away.id, home_name:own.name,away_name:away.name,season,kind,week,day,game_number:gameNumber||1,method:"live",tags:[],status:"in_progress",lineup,weather_id:weather?.[0]?.id,stadium_name:stadiums?.[0]?.name,ohtani_rule:false };
-    const all = await localStore.games(); if (all.some(g => g.status === "in_progress")) { Alert.alert("試合が進行中です", "先に進行中の試合を保存して閉じてください"); return; }
-    await localStore.saveGames([game, ...all]); setGames([game, ...all]); router.push(`/scoring/${id}` as any);
+    if (!teamRows || teamRows.length < 2) { Alert.alert("チームがありません", "先にマスタ管理でチームを登録してください"); return; }
+    const now=new Date(),pad=(n:number)=>String(n).padStart(2,"0"),iso=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`,tm=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const own=teamRows.find(t=>t.is_own_team)??teamRows[0],away=teamRows.find(t=>t.id!==own.id)!;
+    const make=(team:any)=>Array.from({length:9},(_,i)=>({roster_player_id:"",position_id:[1,2,3,4,5,6,7,8,9][i],slot:i+1}));
+    const lineups:{[key:string]:any[]}={[own.id]:make(own),[away.id]:make(away)};
+    for(const team of [own,away]){const candidates=(players??[]).filter(p=>p.team_id===team.id&&!p.retired).slice(0,9);candidates.forEach((pl,i)=>{lineups[team.id][i]={...lineups[team.id][i],roster_player_id:pl.id,position_id:pl.primary_position_id??i+1}});}
+    const pitcherFor=(team:any)=>((players??[]).find(p=>p.team_id===team.id&&!p.retired&&p.primary_position_id===1)??(players??[]).find(p=>p.team_id===team.id&&!p.retired))?.id??"";
+    setPlayersForCreate(players??[]);setDraft({teamRows,ownId:own.id,awayId:away.id,homeId:own.id,awayTeamId:away.id,lineups,pitchers:{[own.id]:pitcherFor(own),[away.id]:pitcherFor(away)},stadium:stadiums?.[0],weather:weather?.[0],iso,tm,ohtani:false,retiredVisible:false});setCreateOpen(true);
+  };
+  const recentLineup=async(teamId:string)=>{
+    const {data:gamesRecent}=await supabase.from("scoring_games").select("id,game_date").or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`).order("game_date",{ascending:false}).limit(20);
+    if(!gamesRecent?.length){Alert.alert("過去の試合がありません");return}
+    const {data:rows}=await supabase.from("scoring_lineups").select("*").eq("team_id",teamId).in("game_id",gamesRecent.map(g=>g.id)).order("slot");
+    const old=rows?.filter(r=>r.game_id===gamesRecent[0].id)??[];const eligible=new Set(playersForCreate.filter(p=>p.team_id===teamId&&!p.retired).map(p=>p.id));const slots=Array.from({length:9},(_,i)=>{const r=old.find(x=>x.slot===i+1);return r&&eligible.has(r.roster_player_id)?{roster_player_id:r.roster_player_id,position_id:r.position_id,slot:i+1}:{roster_player_id:"",position_id:i===0?1:i+1,slot:i+1}});setDraft((d:any)=>({...d,lineups:{...d.lineups,[teamId]:slots},pitchers:{...d.pitchers,[teamId]:old.find(r=>r.slot===10&&eligible.has(r.roster_player_id))?.roster_player_id??d.pitchers[teamId]}}));
+  };
+  const createGame=async()=>{
+    if(!draft)return;const ids=[draft.awayTeamId,draft.homeId];
+    for(const tid of ids){const rows=draft.lineups[tid]??[];if(rows.length!==9||rows.some((r:any)=>!r.roster_player_id)){Alert.alert("打順が未完成です","両チームの1〜9番を選んでください");return}if(new Set(rows.map((r:any)=>r.roster_player_id)).size!==9){Alert.alert("選手が重複しています","同じ選手を複数の打順に登録できません");return}if(!draft.pitchers[tid]){Alert.alert("投手を選択してください");return}}
+    const id=newId(),displayNo=`${draft.iso.replaceAll("-","")}${draft.tm.replace(":","")}`,season=String(new Date(draft.iso).getFullYear());const lineup:any[]=[];
+    for(const teamId of ids){const batting=draft.lineups[teamId].map((row:any)=>({...row}));const pitcherId=draft.pitchers[teamId];const pitcher=playersForCreate.find(x=>x.id===pitcherId);let ohtani=false;if(draft.ohtani){const dual=batting.find((row:any)=>row.roster_player_id===pitcherId);if(dual){dual.position_id=10;ohtani=true}}for(const row of batting){const pl=playersForCreate.find(x=>x.id===row.roster_player_id);lineup.push({team_id:teamId,slot:row.slot,roster_player_id:pl.id,position_id:row.position_id,batting_hand:pl.bat_hand==="S"?"R":pl.bat_hand,throwing_hand:pl.throw_hand,uniform_no:String(pl.show_index??row.slot),ohtani_rule:ohtani,player_snapshot:pl})}lineup.push({team_id:teamId,slot:10,roster_player_id:pitcherId,position_id:1,batting_hand:pitcher.bat_hand==="S"?"R":pitcher.bat_hand,throwing_hand:pitcher.throw_hand,uniform_no:String(pitcher.show_index??1),ohtani_rule:ohtani,player_snapshot:pitcher})}
+    const game:LocalGame={id,display_game_number:displayNo,game_date:draft.iso,game_time:draft.tm,stadium_id:draft.stadium?.id??null,weather_id:draft.weather?.id,home_team_id:draft.homeId,away_team_id:draft.awayTeamId,home_name:draft.teamRows.find((x:any)=>x.id===draft.homeId)?.name,away_name:draft.teamRows.find((x:any)=>x.id===draft.awayTeamId)?.name,season,kind:"練習試合",week:"1",day:"1",game_number:1,method:"live",tags:[],status:"in_progress",lineup,ohtani_rule:draft.ohtani};
+    const existing=await localStore.games();if(existing.some(g=>g.status==="in_progress")){Alert.alert("試合が進行中です","先に進行中の試合を保存して閉じてください");return}await localStore.saveGames([game,...existing]);setGames([game,...existing]);setCreateOpen(false);router.push(`/scoring/${id}` as any);
   };
   if (isLoading) return <View style={s.center}><Text>読み込み中…</Text></View>;
   if (!user) return <Redirect href="/login" />;
@@ -102,6 +111,7 @@ export default function ScoringHome() {
       <TouchableOpacity style={s.primary} onPress={() => router.push(`/scoring/master?kind=${encodeURIComponent(masterTab)}` as any)}><Text style={s.primaryText}>＋ {masterTab}を追加</Text></TouchableOpacity>
       {masters.map((item,i)=><TouchableOpacity key={text(item.id) || i} style={s.card} onPress={()=>router.push(`/scoring/master?kind=${encodeURIComponent(masterTab)}&id=${text(item.id)}` as any)}><View style={{flex:1}}><Text style={s.cardTitle}>{text(item.name) || text(item.name_s) || `#${item.id}`}</Text><Text style={s.sub}>{item.display_flag === false || item.retired ? "無効・引退" : "有効"}</Text></View><Text>編集 ›</Text></TouchableOpacity>)}
     </>}
+    <Modal visible={createOpen} transparent animationType="slide" onRequestClose={()=>setCreateOpen(false)}><View style={{flex:1,backgroundColor:"#0008",justifyContent:"center",padding:18}}><View style={{backgroundColor:"white",padding:18,borderRadius:12,maxHeight:"94%",gap:10}}><Text style={s.title}>新しい試合・スタメン</Text><ScrollView>{draft&&[draft.awayTeamId,draft.homeId].map((teamId:string,ti:number)=><View key={teamId} style={{marginBottom:14}}><Text style={s.cardTitle}>{draft.teamRows.find((t:any)=>t.id===teamId)?.name}{ti===0?"（先攻）":"（後攻）"}</Text><View style={s.row}><TouchableOpacity style={s.outline} onPress={()=>recentLineup(teamId)}><Text>ラストオーダー</Text></TouchableOpacity><TouchableOpacity style={s.outline} onPress={()=>setRetiredVisible(!retiredVisible)}><Text>{retiredVisible?"引退選手を隠す":"退部済みを表示"}</Text></TouchableOpacity><Text>投手:</Text>{playersForCreate.filter(p=>p.team_id===teamId&&(retiredVisible||!p.retired)).map(p=><TouchableOpacity key={p.id} style={[s.chip,draft.pitchers[teamId]===p.id&&s.active]} onPress={()=>setDraft((d:any)=>({...d,pitchers:{...d.pitchers,[teamId]:p.id}}))}><Text style={draft.pitchers[teamId]===p.id?s.activeText:s.chipText}>{p.name}</Text></TouchableOpacity>)}</View>{draft.lineups[teamId].map((row:any,i:number)=><View key={i} style={[s.row,{alignItems:"center"}]}><Text style={{width:42}}>{i+1}番</Text><Text>守備</Text>{[1,2,3,4,5,6,7,8,9,10].map(pos=><TouchableOpacity key={pos} style={[s.chip,draft.lineups[teamId][i].position_id===pos&&s.active,{paddingHorizontal:8,paddingVertical:7}]} onPress={()=>setDraft((d:any)=>({...d,lineups:{...d.lineups,[teamId]:d.lineups[teamId].map((r:any,j:number)=>j===i?{...r,position_id:pos}:r)}}))}><Text style={draft.lineups[teamId][i].position_id===pos?s.activeText:s.chipText}>{pos===10?"DH":pos}</Text></TouchableOpacity>)}<ScrollView horizontal style={{maxWidth:280}}>{playersForCreate.filter(p=>p.team_id===teamId&&(retiredVisible||!p.retired)).map(p=><TouchableOpacity key={p.id} style={[s.chip,draft.lineups[teamId][i].roster_player_id===p.id&&s.active]} onPress={()=>setDraft((d:any)=>({...d,lineups:{...d.lineups,[teamId]:d.lineups[teamId].map((r:any,j:number)=>j===i?{...r,roster_player_id:p.id}:r)}}))}><Text style={draft.lineups[teamId][i].roster_player_id===p.id?s.activeText:s.chipText}>{p.name}</Text></TouchableOpacity>)}</ScrollView></View>)}</View>)}<TouchableOpacity style={s.chip} onPress={()=>setDraft((d:any)=>({...d,ohtani:!d.ohtani}))}><Text>大谷ルール {draft?.ohtani?"ON":"OFF"}</Text></TouchableOpacity></ScrollView><View style={s.row}><TouchableOpacity style={s.outline} onPress={()=>setCreateOpen(false)}><Text>キャンセル</Text></TouchableOpacity><TouchableOpacity style={s.primary} onPress={createGame}><Text style={s.primaryText}>試合を作成</Text></TouchableOpacity></View></View></View></Modal>
   </ScrollView>;
 }
 const s=StyleSheet.create({page:{flex:1,backgroundColor:"#f4f6f8"},wrap:{padding:20,gap:12,maxWidth:1100,width:"100%",alignSelf:"center"},center:{flex:1,alignItems:"center",justifyContent:"center"},title:{fontSize:28,fontWeight:"700",color:"#132b45"},row:{flexDirection:"row",gap:8,flexWrap:"wrap"},chip:{paddingHorizontal:16,paddingVertical:10,borderWidth:1,borderColor:"#ccd5de",borderRadius:8,backgroundColor:"white"},active:{backgroundColor:"#0a7ea4",borderColor:"#0a7ea4"},chipText:{color:"#243b53"},activeText:{color:"white",fontWeight:"600"},primary:{backgroundColor:"#0a7ea4",borderRadius:8,padding:14,alignItems:"center"},primaryText:{color:"white",fontWeight:"700",fontSize:16},card:{backgroundColor:"white",borderRadius:10,padding:14,flexDirection:"row",alignItems:"center",gap:8,borderWidth:1,borderColor:"#e1e6eb"},cardTitle:{fontWeight:"700",fontSize:16,color:"#152f49"},sub:{fontSize:13,color:"#65788a",marginTop:4},outline:{borderColor:"#0a7ea4",borderWidth:1,borderRadius:7,paddingHorizontal:12,paddingVertical:9}});

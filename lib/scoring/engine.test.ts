@@ -39,6 +39,13 @@ describe('scoring engine mirrors prototype state transitions', () => {
     applyPage(st, page('ボーク', 'BK'));
     expect(st.bases[1]).toBe(77); expect(st.pcount[1]).toBeUndefined();
   });
+  it('third strike requires a manual batter out or advance before commit', () => {
+    const st = initState(); st.s = 2;
+    const strikeout = page('空振', 'S');
+    expect(checkCommit(st, strikeout)).toBe('打席結果（アウトまたは進塁）を入力してください');
+    strikeout.ra[0] = { out: true };
+    expect(checkCommit(st, strikeout)).toBeNull();
+  });
   it('batter interference requires a manual batter advance', () => {
     const st = initState(), p = page('打撃妨害', 'io');
     expect(checkCommit(st, p)).toContain('打席結果'); p.ra[0] = { to: 1 }; expect(checkCommit(st, p)).toBeNull();
