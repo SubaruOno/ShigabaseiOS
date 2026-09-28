@@ -77,3 +77,25 @@ SELECT t.id,'選手A'||lpad(n::text,2,'0'),'A'||lpad(n::text,2,'0'),'Player A'||
 FROM opponent_teams t CROSS JOIN generate_series(1,12) n;
 INSERT INTO scoring_player_careers(roster_player_id,team_id,start_date,uniform_no)
 SELECT id,team_id,'2026-01-01'::date,lpad(show_index::text,2,'0') FROM scoring_roster_players;
+
+-- Local-only sign-in accounts for scoring UI development. Recreated by `supabase db reset`.
+-- analyst@example.test / shigabase-test-2026
+-- admin@example.test / shigabase-admin-2026
+DO $$
+DECLARE analyst_id uuid := '90000000-0000-4000-8000-000000000001';
+        admin_id uuid := '90000000-0000-4000-8000-000000000002';
+BEGIN
+  INSERT INTO auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,email_change,email_change_token_new,recovery_token)
+  VALUES ('00000000-0000-0000-0000-000000000000',analyst_id,'authenticated','authenticated','analyst@example.test',crypt('shigabase-test-2026',gen_salt('bf')),now(),'{}','{"display_name":"Local Analyst"}',now(),now(),'','','',''),
+         ('00000000-0000-0000-0000-000000000000',admin_id,'authenticated','authenticated','admin@example.test',crypt('shigabase-admin-2026',gen_salt('bf')),now(),'{}','{"display_name":"Local Admin"}',now(),now(),'','','','')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO auth.identities (provider_id,user_id,identity_data,provider,last_sign_in_at,created_at,updated_at)
+  VALUES (analyst_id::text,analyst_id,jsonb_build_object('sub',analyst_id::text,'email','analyst@example.test'),'email',now(),now(),now()),
+         (admin_id::text,admin_id,jsonb_build_object('sub',admin_id::text,'email','admin@example.test'),'email',now(),now(),now())
+  ON CONFLICT (provider_id,provider) DO NOTHING;
+  UPDATE auth.users SET email='analyst@example.test', encrypted_password=crypt('shigabase-test-2026',gen_salt('bf')), email_confirmed_at=now(), banned_until=null, deleted_at=null WHERE id=analyst_id;
+  UPDATE auth.users SET email='admin@example.test', encrypted_password=crypt('shigabase-admin-2026',gen_salt('bf')), email_confirmed_at=now(), banned_until=null, deleted_at=null WHERE id=admin_id;
+  INSERT INTO public.profiles(id,display_name) VALUES (analyst_id,'Local Analyst'),(admin_id,'Local Admin') ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.user_roles(user_id,role) VALUES (analyst_id,'analyst'),(admin_id,'admin')
+  ON CONFLICT DO NOTHING;
+END $$;
