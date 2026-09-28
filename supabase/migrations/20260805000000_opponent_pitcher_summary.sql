@@ -2,7 +2,8 @@
 -- 自チーム選手（user_roles.role = 'player'）を除外し、
 -- 有効球種（NULL・数値文字列を除く）のみをpitch_countとしてカウントする
 
-CREATE OR REPLACE FUNCTION get_opponent_pitcher_summary()
+DROP FUNCTION IF EXISTS get_opponent_pitcher_summary();
+CREATE FUNCTION get_opponent_pitcher_summary()
 RETURNS TABLE(
   pitcher_name  text,
   pitcher_hand  text,

@@ -2,7 +2,8 @@
 -- top_bottom='表'（相手チームが守備）→ 投手は home_team
 -- top_bottom='裏'（相手チームが守備）→ 投手は away_team
 
-CREATE OR REPLACE FUNCTION get_opponent_pitcher_summary()
+DROP FUNCTION IF EXISTS get_opponent_pitcher_summary();
+CREATE FUNCTION get_opponent_pitcher_summary()
 RETURNS TABLE(
   pitcher_name  text,
   pitcher_hand  text,
