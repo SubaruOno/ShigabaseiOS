@@ -57,7 +57,8 @@
           }
         }
       ],
-      "./plugins/withRCTTurboModuleFix"
+      "./plugins/withRCTTurboModuleFix",
+      "./plugins/withFmtConstevalFix"
     ],
     "experiments": {
       "typedRoutes": true,
