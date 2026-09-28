@@ -288,6 +288,10 @@ const styles = StyleSheet.create({
   stepDotText: { color: "#fff", fontSize: moderateScale(13), fontWeight: "700" },
   stepLabel: { fontSize: moderateScale(11) },
   card: {
+    // iPadやブラウザで横に伸びすぎないようにする
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     padding: scale(24),
     borderRadius: scale(16),
     shadowColor: "#000",

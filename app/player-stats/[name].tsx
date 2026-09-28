@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
+import { useLayout } from "@/hooks/use-layout";
 import {
   BatterStats,
   PitchForStats,
@@ -134,6 +135,7 @@ export default function PlayerStatsScreen() {
   const { user } = useAuth();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+  const { isWide } = useLayout();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>("batting");
   const [filters, setFilters] = useState<Filters>({ year: null, season: null, kind: null, gameIds: null });
@@ -874,24 +876,31 @@ export default function PlayerStatsScreen() {
                 </View>
               )}
 
-              {/* 球種円グラフ */}
-              {Object.keys(pitchingStats.byType).length > 0 && (
-                <PitchTypePieChart
-                  byType={pitchingStats.byType}
-                  total={pitchingStats.pitches}
-                  textColor={colors.text}
-                  subTextColor={colors.icon}
-                  backgroundColor={cardBg}
-                />
-              )}
+              {/* 広い画面では円グラフとコース図を左右に並べる */}
+              <View style={isWide ? styles.chartsWide : undefined}>
+                {/* 球種円グラフ */}
+                {Object.keys(pitchingStats.byType).length > 0 && (
+                  <View style={isWide ? styles.chartsWideItem : undefined}>
+                    <PitchTypePieChart
+                      byType={pitchingStats.byType}
+                      total={pitchingStats.pitches}
+                      textColor={colors.text}
+                      subTextColor={colors.icon}
+                      backgroundColor={cardBg}
+                    />
+                  </View>
+                )}
 
-              {/* 投球コースチャート */}
-              <PitchLocationChart
-                pitches={filteredPitching}
-                textColor={colors.text}
-                subTextColor={colors.icon}
-                backgroundColor={cardBg}
-              />
+                {/* 投球コースチャート */}
+                <View style={isWide ? styles.chartsWideItem : undefined}>
+                  <PitchLocationChart
+                    pitches={filteredPitching}
+                    textColor={colors.text}
+                    subTextColor={colors.icon}
+                    backgroundColor={cardBg}
+                  />
+                </View>
+              </View>
             </View>
           ) : (
             <View style={styles.emptyBox}>
@@ -1035,6 +1044,8 @@ const styles = StyleSheet.create({
   },
   tabText: { fontSize: 14, fontWeight: "500" },
   scrollContent: { padding: 16, gap: 12 },
+  chartsWide: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
+  chartsWideItem: { flex: 1 },
   card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: "600" },
   gameRow: {

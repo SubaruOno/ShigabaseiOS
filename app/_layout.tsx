@@ -13,6 +13,10 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider } from "@/hooks/use-auth";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useForceUpdate } from "@/hooks/use-force-update";
+import { CONTENT_MAX_WIDTH } from "@/hooks/use-layout";
+
+// 一覧やフォームの画面は、iPadやブラウザで横に伸びすぎないよう中央に寄せる
+const NARROW_CONTENT = { width: "100%", maxWidth: CONTENT_MAX_WIDTH, alignSelf: "center" } as const;
 import { ForceUpdateModal } from "@/components/force-update-modal";
 
 const queryClient = new QueryClient({
@@ -95,7 +99,7 @@ function AppLayout() {
         />
         <Stack.Screen
           name="upload"
-          options={{
+          options={{ contentStyle: NARROW_CONTENT,
             title: "コンテンツ投稿",
             headerLeft: () => (
               <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
@@ -113,8 +117,12 @@ function AppLayout() {
           options={{ title: "データ分析", headerBackTitle: "戻る" }}
         />
         <Stack.Screen
+          name="analytics/scout"
+          options={{ contentStyle: NARROW_CONTENT, title: "データ分析", headerBackTitle: "戻る" }}
+        />
+        <Stack.Screen
           name="game-analysis/index"
-          options={{ title: "試合結果", headerBackTitle: "戻る" }}
+          options={{ contentStyle: NARROW_CONTENT, title: "試合結果", headerBackTitle: "戻る" }}
         />
         <Stack.Screen
           name="game-analysis/[id]"
@@ -134,7 +142,7 @@ function AppLayout() {
         />
         <Stack.Screen
           name="bullpen/index"
-          options={{ title: "ブルペン", headerBackTitle: "戻る" }}
+          options={{ contentStyle: NARROW_CONTENT, title: "ブルペン", headerBackTitle: "戻る" }}
         />
         <Stack.Screen
           name="bullpen/[id]"
@@ -142,11 +150,11 @@ function AppLayout() {
         />
         <Stack.Screen
           name="bullpen/record"
-          options={{ headerShown: false }}
+          options={{ contentStyle: NARROW_CONTENT, headerShown: false }}
         />
         <Stack.Screen
           name="opponent-pitchers/index"
-          options={{ title: "相手投手", headerBackTitle: "戻る" }}
+          options={{ contentStyle: NARROW_CONTENT, title: "相手投手", headerBackTitle: "戻る" }}
         />
         <Stack.Screen
           name="opponent-pitchers/[name]"

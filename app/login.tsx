@@ -233,6 +233,10 @@ const styles = StyleSheet.create({
     padding: scale(20),
   },
   card: {
+    // iPadやブラウザで横に伸びすぎないようにする
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     padding: scale(24),
     borderRadius: scale(16),
     shadowColor: "#000",

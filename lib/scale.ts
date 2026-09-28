@@ -6,14 +6,19 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const BASE_WIDTH = 390;
 const BASE_HEIGHT = 844;
 
+// iPadでは画面幅のまま拡大すると2〜3倍になるため、iPhoneの最大サイズで頭打ちにする。
+// 向きで値が変わらないよう、短辺・長辺で計算する。
+const SCALE_WIDTH = Math.min(Math.min(SCREEN_WIDTH, SCREEN_HEIGHT), 440);
+const SCALE_HEIGHT = Math.min(Math.max(SCREEN_WIDTH, SCREEN_HEIGHT), 956);
+
 /** 横幅基準のスケール（水平方向のサイズ・フォントに使う） */
 export function scale(size: number): number {
-  return Math.round(PixelRatio.roundToNearestPixel((SCREEN_WIDTH / BASE_WIDTH) * size));
+  return Math.round(PixelRatio.roundToNearestPixel((SCALE_WIDTH / BASE_WIDTH) * size));
 }
 
 /** 縦幅基準のスケール（高さ・縦方向の余白に使う） */
 export function verticalScale(size: number): number {
-  return Math.round(PixelRatio.roundToNearestPixel((SCREEN_HEIGHT / BASE_HEIGHT) * size));
+  return Math.round(PixelRatio.roundToNearestPixel((SCALE_HEIGHT / BASE_HEIGHT) * size));
 }
 
 /**

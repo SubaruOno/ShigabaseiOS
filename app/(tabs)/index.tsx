@@ -15,6 +15,7 @@ import { verticalScale } from "@/lib/scale";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/hooks/use-auth";
 import { Colors } from "@/constants/theme";
+import { useLayout } from "@/hooks/use-layout";
 
 const CALENDAR_ID = "shigauni.bbc@gmail.com";
 const CALENDAR_URL = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}&ctz=Asia%2FTokyo&hl=ja&mode=AGENDA&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0`;
@@ -29,13 +30,19 @@ const categoryCards = [
 
 function HeroHeader() {
   const insets = useSafeAreaInsets();
+  const { width, isLandscape } = useLayout();
+  // 横向きでは画像の比率のままだと画面の半分近くを占めるので、高さを抑える
+  // 切り取ると文字が欠けるので、画像全体を収めて左右は画像の端と同じ紺色で埋める
+  const heroStyle = isLandscape
+    ? { aspectRatio: undefined, height: Math.min(width / 2.36, 220), backgroundColor: "#082849" }
+    : null;
 
   return (
-    <View style={styles.heroWrapper}>
+    <View style={[styles.heroWrapper, heroStyle]}>
       <Image
         source={require("@/assets/images/header.png")}
         style={styles.heroBg}
-        resizeMode="cover"
+        resizeMode={isLandscape ? "contain" : "cover"}
       />
       {/* ステータスバー分の余白 */}
       <View style={{ height: insets.top }} />
@@ -47,6 +54,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const { user, isLoading } = useAuth();
+  const { isWide } = useLayout();
 
   if (isLoading) {
     return (
@@ -68,9 +76,9 @@ export default function HomeScreen() {
     >
       <HeroHeader />
 
-      <View style={styles.body}>
+      <View style={[styles.body, isWide && styles.bodyWide]}>
         {/* カテゴリカード */}
-        <View style={[styles.menuCard, { backgroundColor: cardBg }]}>
+        <View style={[styles.menuCard, { backgroundColor: cardBg }, isWide && styles.column]}>
           {categoryCards.map((card, index) => (
             <TouchableOpacity
               key={card.title}
@@ -97,7 +105,7 @@ export default function HomeScreen() {
         </View>
 
         {/* カレンダー */}
-        <View style={styles.calendarSection}>
+        <View style={[styles.calendarSection, isWide && styles.column]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="calendar-outline" size={18} color={colors.tint} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -143,6 +151,9 @@ const styles = StyleSheet.create({
 
   /* コンテンツ */
   body: { padding: 16, gap: 16 },
+  // 広い画面ではメニューとカレンダーを左右に並べる
+  bodyWide: { flexDirection: "row", alignItems: "flex-start" },
+  column: { flex: 1 },
 
   /* リスト型カード */
   menuCard: {

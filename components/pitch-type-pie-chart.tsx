@@ -120,7 +120,7 @@ export const PitchTypePieChart = memo(function PitchTypePieChart({
 
 const styles = StyleSheet.create({
   container: { flexDirection: "row", alignItems: "center", gap: 12 },
-  legend: { flex: 1, gap: 5 },
+  legend: { flex: 1, maxWidth: 320, gap: 5 },
   legendRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   dot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   legendLabel: { fontSize: 13, fontWeight: "500", flex: 1 },
