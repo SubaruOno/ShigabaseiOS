@@ -10,8 +10,16 @@ async function storage(): Promise<StorageLike> {
       setItem: async (key, value) => { if (typeof localStorage !== "undefined") localStorage.setItem(key, value); else webMemory.set(key, value); },
     };
   }
-  const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-  return AsyncStorage;
+  // アプリに組み込み済みの expo-file-system で、端末の書類フォルダにキーごとのファイルとして保存する（ネット不要）
+  const FS = await import("expo-file-system/legacy");
+  const dir = `${FS.documentDirectory}scoring/`;
+  const path = (key: string) => dir + key.replace(/[^A-Za-z0-9_-]/g, "_") + ".json";
+  const info = await FS.getInfoAsync(dir);
+  if (!info.exists) await FS.makeDirectoryAsync(dir, { intermediates: true });
+  return {
+    getItem: async (key) => { const p = path(key); return (await FS.getInfoAsync(p)).exists ? FS.readAsStringAsync(p) : null; },
+    setItem: async (key, value) => { await FS.writeAsStringAsync(path(key), value); },
+  };
 }
 export type LocalGame = { id: string; display_game_number: string; game_date: string; game_time: string; home_team_id: string; away_team_id: string; season: string; kind: string; week: string; day: string; game_number: number; stadium_id?: string | null; weather_id?: number | null; method: "live" | "video"; umpire?: string; tags: string[]; status: "draft" | "in_progress" | "completed" | "suspended"; lineup: unknown[]; home_name?: string; away_name?: string; stadium_name?: string; ohtani_rule?: boolean; };
 export type LocalPlay = { seq: number; page: Page; client_mutation_id: string; created_at: string };
