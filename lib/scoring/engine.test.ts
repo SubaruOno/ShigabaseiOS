@@ -71,3 +71,31 @@ describe('scoring engine mirrors prototype state transitions', () => {
     expect(st.half).toBe(1); expect(st.outs).toBe(0); expect(st.bases).toEqual([null, null, null]);
   });
 });
+
+describe('追い越し防止（すばるの指摘 2026-09-29）', () => {
+  it('1塁走者がいて三塁打なら、走者は生還し打者は3塁', () => {
+    const pages = [blank()];
+    pages[0].res = { label: '単打', kind: 1 };
+    const p2 = blank(); p2.res = { label: '三塁打', kind: 3 };
+    const st = stateAt(2, [pages[0], p2]);
+    expect(st.bases[2]).not.toBeNull();
+    expect(st.bases[0]).toBeNull();
+    expect(st.score[0]).toBe(1);
+  });
+  it('1塁走者がいて二塁打なら、走者は3塁、打者は2塁', () => {
+    const p1 = blank(); p1.res = { label: '単打', kind: 1 };
+    const p2 = blank(); p2.res = { label: '二塁打', kind: 2 };
+    const st = stateAt(2, [p1, p2]);
+    expect(st.bases[1]).not.toBeNull();
+    expect(st.bases[2]).not.toBeNull();
+    expect(st.bases[0]).toBeNull();
+  });
+  it('手で打者を2塁へ進めたら、1塁走者は3塁へ押し出される', () => {
+    const p1 = blank(); p1.res = { label: '単打', kind: 1 };
+    const p2 = blank(); p2.res = { label: '失策出塁', kind: 'e' }; p2.ra = { 0: { to: 2 } };
+    const st = stateAt(2, [p1, p2]);
+    expect(st.bases[0]).toBeNull();
+    expect(st.bases[1]).not.toBeNull();
+    expect(st.bases[2]).not.toBeNull();
+  });
+});

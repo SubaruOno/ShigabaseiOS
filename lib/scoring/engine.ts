@@ -33,8 +33,9 @@ export function autoMoves(st: GameState, p: Page): Record<number, Move> {
   const walk = (k === 'B' && st.b >= 3) || k === 'IBB' || k === 'hbp';
   if (walk) { m[0] = { to: 1 }; let need = 1; for (let i = 1; i <= 3; i++) if (st.bases[i - 1] != null && need === i) { m[i] = { to: i + 1 }; need = i + 1; } }
   else if (k === 4) { m[0] = { to: 4 }; [1, 2, 3].forEach(i => { if (st.bases[i - 1] != null) m[i] = { to: 4 }; }); }
-  else if (k === 1 || k === 'fc' || k === 'BK') { if (k !== 'BK') m[0] = { to: 1 }; [1, 2, 3].forEach(i => { if (st.bases[i - 1] != null) m[i] = { to: i + 1 }; }); }
-  else if (typeof k === 'number') m[0] = { to: k };
+  // 安打は、走者も打者と同じ塁数だけ進む（BASSの結果マスタの runs と同じ。単打は実入力で確認）
+  else if (k === 1 || k === 2 || k === 3) { m[0] = { to: k }; [1, 2, 3].forEach(i => { if (st.bases[i - 1] != null) m[i] = { to: Math.min(i + k, 4) }; }); }
+  else if (k === 'fc' || k === 'BK') { if (k !== 'BK') m[0] = { to: 1 }; [1, 2, 3].forEach(i => { if (st.bases[i - 1] != null) m[i] = { to: i + 1 }; }); }
   else if (k === 'out' || k === 'sac') m[0] = { out: true };
   else if (k === 'e') m[0] = { to: 1 };
   return m;
@@ -42,6 +43,15 @@ export function autoMoves(st: GameState, p: Page): Record<number, Move> {
 export function moves(st: GameState, p: Page): Record<number, Move> {
   const m = autoMoves(st, p);
   for (const [base, action] of Object.entries(p.ra)) { const n = Number(base); if (action.back) { delete m[n]; continue; } m[n] = { ...m[n], ...action }; if (action.out) delete m[n].to; else if (action.to) delete m[n].out; }
+  // 追い越し防止：後ろの走者（打者を含む）が前の走者と同じ塁以上に進むなら、前の走者を1つ先へ押し出す
+  let behind = m[0]?.to && !m[0]?.out ? m[0].to : 0;
+  for (let i = 1; i <= 3; i++) {
+    if (st.bases[i - 1] == null) continue;
+    const a = m[i]; if (a?.out) continue;
+    let dest = a?.to ?? i;
+    if (behind > 0 && behind < 4 && dest <= behind) { dest = Math.min(behind + 1, 4); m[i] = { ...(a || {}), to: dest }; }
+    behind = dest;
+  }
   return m;
 }
 export function applyPre(st: GameState, p: Page) {
