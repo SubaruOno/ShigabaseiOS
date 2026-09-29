@@ -21,7 +21,7 @@ async function storage(): Promise<StorageLike> {
     setItem: async (key, value) => { await FS.writeAsStringAsync(path(key), value); },
   };
 }
-export type LocalGame = { id: string; display_game_number: string; game_date: string; game_time: string; home_team_id: string; away_team_id: string; season: string; kind: string; week: string; day: string; game_number: number; stadium_id?: string | null; weather_id?: number | null; method: "live" | "video"; umpire?: string; tags: string[]; status: "draft" | "in_progress" | "completed" | "suspended"; lineup: unknown[]; home_name?: string; away_name?: string; stadium_name?: string; ohtani_rule?: boolean; };
+export type LocalGame = { id: string; display_game_number: string; game_date: string; game_time: string; home_team_id: string; away_team_id: string; season: string; kind: string; week: string; day: string; game_number: number; stadium_id?: string | null; weather_id?: number | null; weather_name?: string; method: "live" | "video"; umpire?: string; tags: string[]; status: "draft" | "in_progress" | "completed" | "suspended"; lineup: unknown[]; home_name?: string; away_name?: string; stadium_name?: string; ohtani_rule?: boolean; synced_at?: string; score_home?: number; score_away?: number; };
 export type LocalPlay = { seq: number; page: Page; client_mutation_id: string; created_at: string };
 import type { Page } from "./engine";
 async function read<T>(key: string, fallback: T): Promise<T> { const raw = await (await storage()).getItem(PREFIX + key); return raw ? JSON.parse(raw) as T : fallback; }
@@ -29,6 +29,8 @@ async function write<T>(key: string, value: T) { await (await storage()).setItem
 export const localStore = {
   games: () => read<LocalGame[]>("games", []),
   saveGames: (games: LocalGame[]) => write("games", games),
+  masters: (kind: string) => read<Record<string, unknown>[]>(`master:${kind}`, []),
+  saveMasters: (kind: string, rows: Record<string, unknown>[]) => write(`master:${kind}`, rows),
   plays: (gameId: string) => read<LocalPlay[]>(`plays:${gameId}`, []),
   rosterPlayers: (teamId: string) => read<Record<string, unknown>[]>(`roster:${teamId}`, []),
   saveRosterPlayers: (teamId: string, players: Record<string, unknown>[]) => write(`roster:${teamId}`, players),

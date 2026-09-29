@@ -84,7 +84,7 @@ const caption=(x:number,y:number,label:string)=><View pointerEvents="none" style
  const saveErrors=()=>{if(!errorTypes.length){setModal(null);return}edit(p=>p.catch_fielder.push({pos:errorPos,err:errorTypes.join("、")}));setModal(null)};
  const undo=async()=>{if(focusPage===pages.length-1&&focusPage>0){const next=pages.slice(0,-2);next.push(blank());await saveNow(next);setFocusPage(next.length-1)}};
  const pageNav=(idx:number)=>{setFocusPage(Math.max(0,Math.min(idx,pages.length-1)));setHomeOpen(false);setRunnerSel(null);setOpenMenu(null)};
- const openSummary=()=>setModal("summary");
+ const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{if(typeof window!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));const {router}=await import("expo-router");router.replace("/scoring" as any)})};
  const inningTable=()=>{const next=preview,t=next.half,i0=next.bi[t];return <View><Text style={s.dialogTitle}>イニングの確認</Text><Text style={s.subheading}>{teamNames[t]}　次の打者 {i0+1}番</Text>{next.lu[t].order.map((n,i)=><View key={i} style={[s.tableRow,i===i0&&{backgroundColor:"#20c997"}]}><Text style={i===i0?{color:"#fff"}:undefined}>{i+1}　#{n}　{next.lu[t].bats[i]}</Text></View>)}<Text style={{marginTop:8}}>{teamNames[0]} {next.score[0]}　{teamNames[1]} {next.score[1]}</Text></View>};
  const menuOptions=Object.keys(STRATS);
  const planList=(key:string)=>plans.filter(x=>Number(x.show_index)===(key==="バント"?1:key==="盗塁"?2:3));
