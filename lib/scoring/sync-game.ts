@@ -1,19 +1,98 @@
-import { supabase } from "@/lib/supabase";
-import { export191Row } from "@/lib/scoring/export191";
-import { stateAt, teamSetupsFromLineup } from "@/lib/scoring/engine";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
+import { toAnalysisPitches } from "@/lib/scoring/to-pitches";
 
-// Existing scoring sync flow shared by the top screen and game management.
-export async function syncScoringGame(game: LocalGame, userId: string) {
+type Lineup = { team_id: string; slot: number; roster_player_id: string; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; ohtani_rule?: boolean; player_snapshot?: Record<string, any> };
+
+export async function syncScoringGame(game: LocalGame, userId: string, supabase: SupabaseClient) {
+  const plays = await localStore.plays(game.id);
+  const deviceId = await localStore.deviceId();
+  const localPlayers = [...await localStore.rosterPlayers(game.away_team_id), ...await localStore.rosterPlayers(game.home_team_id)];
+  const playerIdMap = new Map<string, string>();
+  for (const player of localPlayers.filter(p => p.provisional && String(p.id).startsWith("local-"))) {
+    const id = String(player.sync_id ?? uuid());
+    player.sync_id = id;
+    await localStore.saveRosterPlayers(String(player.team_id), (await localStore.rosterPlayers(String(player.team_id))).map(row => row.id === player.id ? player : row));
+    const { data, error } = await supabase.from("scoring_roster_players").insert({ id, team_id: player.team_id, name: player.name, name_s: player.name_s ?? "", name_e: player.name_e ?? "", name_es: player.name_es ?? "", throw_hand: player.throw_hand ?? "R", bat_hand: player.bat_hand ?? "R", primary_position_id: player.primary_position_id ?? 10, show_index: Number(player.show_index ?? player.uniform_no ?? 0), retired: false }).select("id").single();
+    let syncedId = data?.id;
+    if (error?.code === "23505" || error?.code === "PGRST116") {
+      const existing = await supabase.from("scoring_roster_players").select("id").eq("id",id).single();
+      if (existing.error) throw new Error(`仮登録選手「${player.name}」を同期できませんでした: ${error.message}`);
+      syncedId = existing.data.id;
+    } else if (error) throw new Error(`仮登録選手「${player.name}」を同期できませんでした: ${error.message}`);
+    const career = await supabase.from("scoring_player_careers").select("id").eq("roster_player_id",syncedId).eq("team_id",player.team_id).eq("uniform_no",String(player.uniform_no ?? player.show_index ?? "")).maybeSingle();
+    if(career.error) throw new Error(`仮登録選手「${player.name}」の背番号を確認できませんでした: ${career.error.message}`);
+    if(!career.data){const careers = await supabase.from("scoring_player_careers").insert({ roster_player_id: syncedId, team_id: player.team_id, start_date: game.game_date, uniform_no: String(player.uniform_no ?? player.show_index ?? "") });if (careers.error) throw new Error(`仮登録選手「${player.name}」の背番号を同期できませんでした: ${careers.error.message}`);}
+    playerIdMap.set(String(player.id), syncedId!);
+    await localStore.replaceLocalPlayerId(String(player.id), syncedId!);
+  }
+  const remapPlayer = (row: any) => {
+    const oldId = String(row.roster_player_id ?? row.player_snapshot?.id ?? "");
+    const id = playerIdMap.get(oldId) ?? row.roster_player_id;
+    const player = localPlayers.find(p => String(p.id) === oldId);
+    return { ...row, roster_player_id: id, player_snapshot: player ? { ...player, id } : row.player_snapshot };
+  };
+  const lineup = ((game.lineup ?? []) as Lineup[]).map(remapPlayer);
+
   const { error: gameError } = await supabase.from("scoring_games").upsert({ id: game.id, display_game_number: game.display_game_number, game_date: game.game_date, game_time: game.game_time, stadium_id: game.stadium_id ?? null, weather_id: game.weather_id ?? null, method: game.method, home_team_id: game.home_team_id, away_team_id: game.away_team_id, season: game.season, kind: game.kind, week: game.week, day: game.day, game_number: game.game_number, umpire: game.umpire ?? null, tags: game.tags, status: game.status, created_by: userId }, { onConflict: "id" });
-  if (gameError) throw gameError;
-  if (game.lineup?.length) { const { error } = await supabase.from("scoring_lineups").upsert(game.lineup.map((row:any) => ({game_id:game.id,...row})), {onConflict:"game_id,team_id,slot"}); if(error) throw error; }
-  const plays=await localStore.plays(game.id);
-  if(plays.length){const device=await localStore.deviceId();const {error}=await supabase.from("scoring_plays").upsert(plays.map(p=>({game_id:game.id,seq:p.seq,input_event:p.page,page_state:{},client_mutation_id:p.client_mutation_id,device_id:device})),{onConflict:"game_id,client_mutation_id"});if(error)throw error;}
-  const [{data:home},{data:away}]=await Promise.all([supabase.from("opponent_teams").select("name").eq("id",game.home_team_id).single(),supabase.from("opponent_teams").select("name").eq("id",game.away_team_id).single()]);
-  const existing=await supabase.from("games").select("id").eq("date",`${game.game_date}T00:00:00`).eq("season",game.season).eq("kind",game.kind).eq("game_number",game.game_number).maybeSingle();
-  if(!existing.data){const {error}=await supabase.from("games").insert({id:game.id,date:`${game.game_date}T${game.game_time}:00`,season:game.season,kind:game.kind,week:Number(game.week),game_number:game.game_number,away_team:away?.name??game.away_name??"",home_team:home?.name??game.home_name??"",scorekeeper:game.umpire??null});if(error)throw error;}else{const {error}=await supabase.from("games").update({date:`${game.game_date}T${game.game_time}:00`,away_team:away?.name??game.away_name??"",home_team:home?.name??game.home_name??"",scorekeeper:game.umpire??null}).eq("id",existing.data.id);if(error)throw error;}
-  const {error:delError}=await supabase.from("pitches").delete().eq("game_id",game.id);if(delError)throw delError;
-  if(plays.length){const teamNames:[string,string]=[away?.name??game.away_name??"",home?.name??game.home_name??""];const setup=teamSetupsFromLineup(game.lineup as any,[game.away_team_id,game.home_team_id],teamNames);const lineupNames:[string[],string[]]=[setup[0].order.map(no=>String((game.lineup as any[]).find(x=>x.team_id===game.away_team_id&&Number(x.uniform_no)===no)?.player_snapshot?.name??"")),setup[1].order.map(no=>String((game.lineup as any[]).find(x=>x.team_id===game.home_team_id&&Number(x.uniform_no)===no)?.player_snapshot?.name??""))];const lineupPositions:[string[],string[]]=[setup[0].pos.map(String),setup[1].pos.map(String)];const hands:[string[],string[]]=[setup[0].bats.map(x=>x==="左"?"L":x==="両"?"S":"R"),setup[1].bats.map(x=>x==="左"?"L":x==="両"?"S":"R")];const rows=plays.map((play,index)=>{const st=stateAt(index,plays.map(x=>x.page),setup);const row=export191Row(st,play.page,{dateTime:`${game.game_date} ${game.game_time}:00`,season:game.season,kind:game.kind,week:game.week,day:game.day,gameNumber:game.game_number,homeTeam:teamNames[1],awayTeam:teamNames[0],umpire:game.umpire,pitcherNames:["",""],catcherNames:["",""],lineupNames,lineupPositions,hands,pitcherHands:["R","R"]},play.seq,{result:play.page.res?.label,pitchType:play.page.pitch_type??undefined,pitchSpeed:play.page.ball_speed?Number(play.page.ball_speed):undefined,course:play.page.course??undefined,ballXY:play.page.batted_ball?[play.page.batted_ball.x,play.page.batted_ball.y]:undefined});return {game_id:game.id,play_number:Number(row[9])||play.seq,inning:Number(row[10])||1,top_bottom:String(row[11]||"表"),offense_team:String(row[182]||teamNames[0]),batter_order:Number(row[26])||null,batter_name:row[27]||null,batter_hand:row[28]||null,pitcher_name:row[32]||null,pitcher_hand:row[33]||null,catcher_name:row[35]||null,runner_1st:row[21]||null,runner_2nd:row[23]||null,runner_3rd:row[25]||null,balls:Number(row[14])||0,strikes:Number(row[13])||0,outs:Number(row[15])||0,pa_complete:row[17]||null,pitch_count:Number(row[34])||null,pitch_type:row[44]||null,pitch_speed:Number(row[55])||null,course_x:Number(row[42])||null,course_y:Number(row[43])||null,batting_result:row[45]||null,batting_result2:row[46]||null,hit_type:row[47]||null,hit_strength:row[48]||null,hit_x:Number(row[49])||null,hit_y:Number(row[50])||null,strategy:row[29]||null,strategy2:row[30]||null,strategy_result:row[31]||null,error_type:row[53]||null,fielder:row[46]||null}});const {error}=await supabase.from("pitches").insert(rows);if(error)throw error;}
-  const all=await localStore.games();await localStore.saveGames(all.map(g=>g.id===game.id?{...g,synced_at:new Date().toISOString()}:g));
+  if (gameError) throw new Error(`試合情報を同期できませんでした: ${gameError.message}`);
+  if (lineup.length) {
+    const { error } = await supabase.from("scoring_lineups").upsert(lineup.map(row => ({ game_id: game.id, ...row })), { onConflict: "game_id,team_id,slot" });
+    if (error) throw new Error(`先発メンバーを同期できませんでした: ${error.message}`);
+  }
+  const { error: playError } = await supabase.from("scoring_plays").upsert(plays.map(p => ({ game_id: game.id, seq: p.seq, input_event: p.page, page_state: {}, client_mutation_id: p.client_mutation_id, device_id: deviceId })), { onConflict: "game_id,client_mutation_id" });
+  if (playError) throw new Error(`プレイを同期できませんでした: ${playError.message}`);
+
+  // ローカルのページに記録された選手交代を正規化して同期する。
+  const substitutions: any[] = [];
+  const setupByTeam = new Map<string, Lineup[]>();
+  for (const row of lineup) setupByTeam.set(row.team_id, [...setupByTeam.get(row.team_id) ?? [], row]);
+  const currentIds: Record<0|1, Map<number,string>> = { 0: new Map(), 1: new Map() };
+  for (const side of [0,1] as const) for (const row of setupByTeam.get(side === 0 ? game.away_team_id : game.home_team_id) ?? []) currentIds[side].set(row.slot, row.roster_player_id);
+  for (const [index, play] of plays.entries()) {
+    for (const sub of play.page.subs ?? []) {
+      const teamId = sub.t === 0 ? game.away_team_id : game.home_team_id;
+      const prior = currentIds[sub.t].get(sub.slot === "P" ? 10 : sub.slot + 1) ?? null;
+      const incomingNo = sub.no == null ? null : String(sub.no);
+      const candidate = lineup.find(row => row.team_id === teamId && String(row.uniform_no ?? row.player_snapshot?.uniform_no ?? row.player_snapshot?.show_index) === incomingNo);
+      const local = localPlayers.find(row => row.team_id === teamId && String(row.uniform_no ?? row.show_index) === incomingNo);
+      const incoming = candidate?.roster_player_id ?? (local ? playerIdMap.get(String(local.id)) : undefined);
+      if (!incoming) throw new Error(`第${index+1}プレイの交代選手（背番号${incomingNo ?? "?"}）が見つかりません`);
+      substitutions.push({ game_id: game.id, seq: play.seq, team_id: teamId, slot: sub.slot === "P" ? 10 : sub.slot + 1, replaced_player_id: prior, incoming_player_id: incoming, position_id: sub.pos ?? null, inning: Math.max(1, index + 1), half: sub.t });
+      currentIds[sub.t].set(sub.slot === "P" ? 10 : sub.slot + 1, incoming);
+    }
+  }
+  const { error: clearSubError } = await supabase.from("scoring_substitutions").delete().eq("game_id", game.id);
+  if (clearSubError) throw new Error(`交代履歴を更新できませんでした: ${clearSubError.message}`);
+  if (substitutions.length) { const { error } = await supabase.from("scoring_substitutions").insert(substitutions); if (error) throw new Error(`交代を同期できませんでした: ${error.message}`); }
+
+  const [{ data: home, error: homeError }, { data: away, error: awayError }, { data: ballTypes, error: ballError }, { data: plans }, {data: positions}] = await Promise.all([
+    supabase.from("opponent_teams").select("name").eq("id", game.home_team_id).single(),
+    supabase.from("opponent_teams").select("name").eq("id", game.away_team_id).single(),
+    supabase.from("scoring_ball_types").select("name,old_excel_label"),
+    supabase.from("scoring_plans").select("id,name,old_excel_label"),
+    supabase.from("scoring_positions").select("id,name"),
+  ]);
+  if (homeError || awayError || ballError) throw new Error(`分析用データのマスターを読み込めませんでした: ${homeError?.message ?? awayError?.message ?? ballError?.message}`);
+  const homeName = home?.name ?? game.home_name ?? "";
+  const awayName = away?.name ?? game.away_name ?? "";
+  const { data: linked, error: linkReadError } = await supabase.from("games").select("id").eq("scoring_game_id", game.id).maybeSingle();
+  if (linkReadError) throw new Error(`分析用試合を確認できませんでした: ${linkReadError.message}`);
+  let analysisGameId = linked?.id;
+  if (!analysisGameId) {
+    const {data: legacy} = await supabase.from("games").select("id").eq("date", game.game_date).eq("season",game.season).eq("kind",game.kind).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).maybeSingle();
+    analysisGameId = legacy?.id;
+  }
+  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${game.game_time}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: game.score_away ?? null, home_score: game.score_home ?? null, scorekeeper: game.umpire ?? null };
+  if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
+  else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
+  const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
+  const teamNames: [string,string] = [awayName,homeName];
+  const planNames = Object.fromEntries((plans ?? []).map(p => [String(p.id), p.old_excel_label || p.name]));
+  const positionNames = Object.fromEntries((positions ?? []).map(p => [String(p.id), p.name]));
+  const rows = toAnalysisPitches({ gameId: analysisGameId, plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames, gameDate:game.game_date,gameTime:game.game_time,season:game.season,kind:game.kind,week:game.week,day:game.day,gameNumber:game.game_number,umpire:game.umpire,ballTypes:ballTypes??[],planNames,positionNames });
+  if(rows.length){const {error}=await supabase.from("pitches").insert(rows);if(error)throw new Error(`分析用投球を保存できませんでした: ${error.message}`);}
+  const all = await localStore.games();
+  await localStore.saveGames(all.map(g => g.id === game.id ? { ...g, synced_at: new Date().toISOString() } : g));
 }
+function uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }); }

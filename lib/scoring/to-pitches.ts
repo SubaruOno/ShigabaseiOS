@@ -1,0 +1,83 @@
+import { applyPage, stateAt, teamSetupsFromLineup, type Page } from "./engine";
+
+type LocalPlay = { seq: number; page: Page };
+type LineupRow = { team_id: string; slot: number; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; player_snapshot?: { name?: string; bat_hand?: string; throw_hand?: string; uniform_no?: string | number; show_index?: number } };
+export type AnalysisPitch = Record<string, string | number | null>;
+
+const nonempty = (value: unknown): string | null => value == null || value === "" ? null : String(value);
+const num = (value: unknown): number | null => { const n = Number(value); return value == null || value === "" || !Number.isFinite(n) ? null : n; };
+const positionName: Record<number, string> = { 1:"投手",2:"捕手",3:"一塁手",4:"二塁手",5:"三塁手",6:"遊撃手",7:"左翼手",8:"中堅手",9:"右翼手",10:"DH" };
+const hand = (value?: string | null) => value === "L" ? "左" : value === "S" ? "両" : "右";
+
+function resultWords(page: Page) {
+  const kind = page.res?.kind;
+  if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? page.res?.label ?? null;
+  if (kind === "S") return page.res?.label === "空振" ? "空振り" : "見逃し";
+  if (kind === "B") return "ボール";
+  if (kind === "IBB") return "敬遠";
+  if (kind === "hbp") return "死球";
+  if (kind === "out") return page.feature === 2 ? "凡打飛" : page.feature === 3 ? "凡打直" : "凡打ゴロ";
+  if (kind === "fc") return "野選";
+  if (kind === "sf") return "犠牲フライ";
+  if (kind === "sac") return "犠打";
+  if (kind === "e") return "失策出塁";
+  return page.res?.label ?? null;
+}
+
+function paState(page: Page, before: ReturnType<typeof stateAt>, after: ReturnType<typeof stateAt>) {
+  if (page.skip) return page.ra[0]?.out || page.ra[0]?.to ? "打席完了" : "打席継続";
+  if (!page.res) return "打席継続";
+  const kind = page.res.kind;
+  const complete = (typeof kind === "number") || ["IBB", "hbp", "out", "fc", "sf", "sac", "e", "io"].includes(String(kind)) || (kind === "S" && before.s >= 2) || (kind === "B" && before.b >= 3);
+  return complete || before.bi[before.half] !== after.bi[before.half] || before.inn !== after.inn || before.half !== after.half ? "打席完了" : "打席継続";
+}
+
+export function toAnalysisPitches(input: {
+  gameId: string; plays: LocalPlay[]; lineup: LineupRow[]; teamIds: [string,string]; teamNames: [string,string];
+  gameDate: string; gameTime: string; season: string; kind: string; week: string; day: string; gameNumber: number;
+  umpire?: string | null; ballTypes?: Array<{ name: string; old_excel_label?: string | null }>;
+  planNames?: Record<string, string>; resultNames?: Record<string, string>; substitutions?: Array<Record<string, unknown>>;
+  positionNames?: Record<string, string>;
+}): AnalysisPitch[] {
+  const { plays, lineup, teamIds, teamNames } = input;
+  const setups = teamSetupsFromLineup(lineup as any, teamIds, teamNames);
+  const nameFor = (team: number, no: number | null) => {
+    if (no == null) return null;
+    const row = lineup.find(x => x.team_id === teamIds[team] && Number(x.uniform_no ?? x.player_snapshot?.uniform_no ?? x.player_snapshot?.show_index) === no);
+    return row?.player_snapshot?.name ?? String(no);
+  };
+  const ballName = (value: string | null) => {
+    if (!value) return null;
+    const found = input.ballTypes?.find(b => b.name === value);
+    return found?.old_excel_label || value;
+  };
+  return plays.map((play, index) => {
+    const before = stateAt(index, plays.map(p => p.page), setups, true);
+    const after = stateAt(index + 1, plays.map(p => p.page), setups);
+    const p = play.page;
+    const offense = before.half;
+    const batterNo = before.lu[offense].order[before.bi[offense]];
+    const pitcherNo = before.lu[1-offense].P;
+    const catcherNo = before.lu[1-offense].order.find((_, slot) => before.lu[1-offense].pos[slot] === 2) ?? null;
+    const stateBases = before.bases;
+    const pos = p.feature ? input.positionNames?.[String(p.feature)] ?? positionName[p.feature] ?? null : null;
+    const result2 = p.res?.label === "失策出塁" ? "失策" : null;
+    const planValues = Object.values(p.plan ?? {}).filter(Boolean).map(v => input.planNames?.[String(v)] ?? String(v));
+    const runners = stateBases.map(no => nameFor(offense, no));
+    return {
+      game_id: input.gameId, play_number: play.seq, inning: before.inn, top_bottom: before.half === 0 ? "表" : "裏",
+      offense_team: teamNames[offense], batter_order: before.bi[offense] + 1, batter_name: nameFor(offense, batterNo),
+      batter_hand: hand(p.handB ? (p.handB === "左" ? "L" : "R") : before.lu[offense].bats[before.bi[offense]] === "左" ? "L" : before.lu[offense].bats[before.bi[offense]] === "両" ? "S" : "R"),
+      pitcher_name: nameFor(1-offense, pitcherNo), pitcher_hand: before.lu[1-offense].throws,
+      catcher_name: nameFor(1-offense, catcherNo), runner_1st: runners[0], runner_2nd: runners[1], runner_3rd: runners[2],
+      balls: before.b, strikes: before.s, outs: before.outs, pa_complete: paState(p, before, after),
+      pitch_count: before.pcount[pitcherNo] ?? 0, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
+      course_x: p.course?.[0] ?? null, course_y: p.course?.[1] ?? null,
+      batting_result: resultWords(p), batting_result2: result2, hit_type: pos, hit_strength: p.rank,
+      hit_x: p.batted_ball?.x ?? null, hit_y: p.batted_ball?.y ?? null,
+      strategy: planValues[0] ?? null, strategy2: planValues[1] ?? null, strategy_result: null,
+      error_type: p.res?.label === "失策出塁" ? "失策" : null,
+      fielder: p.catch_fielder.map(x => typeof x === "number" ? input.positionNames?.[String(x)] ?? positionName[x] : input.positionNames?.[String(x.pos)] ?? positionName[x.pos]).filter(Boolean).join("、") || null,
+    };
+  });
+}

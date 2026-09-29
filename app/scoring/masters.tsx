@@ -18,13 +18,16 @@ const columns: Record<Kind, [string, string][]> = {
   メモ: [["name", "名前"], ["division", "区分"], ["show_index", "表示順"]],
 };
 const str = (value: unknown) => value == null ? "" : String(value);
-const bool = (value: unknown) => value === true ? "✓" : value === false ? "—" : str(value);
 
 export default function ScoringMasters() {
   const { user, isLoading, hasRole } = useAuth();
   const [kind, setKind] = useState<Kind>("チーム");
   const [rows, setRows] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [stadiums, setStadiums] = useState<any[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [careers, setCareers] = useState<any[]>([]);
   const [teamFilter, setTeamFilter] = useState("");
   const [search, setSearch] = useState("");
   const [includeRetired, setIncludeRetired] = useState(false);
@@ -33,12 +36,17 @@ export default function ScoringMasters() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [{ data }, { data: teamData }] = await Promise.all([
+    const [{ data }, { data: teamData }, {data: categoryData}, {data: stadiumData}, {data: positionData}, {data: careerData}] = await Promise.all([
       supabase.from(tables[kind]).select("*").limit(1000),
       supabase.from("opponent_teams").select("id,name").order("name"),
+      supabase.from("scoring_categories").select("id,name"),
+      supabase.from("scoring_stadiums").select("id,name"),
+      supabase.from("scoring_positions").select("id,name"),
+      supabase.from("scoring_player_careers").select("roster_player_id,team_id,uniform_no,start_date,end_date").is("end_date", null),
     ]);
     setRows(data ?? []);
     setTeams(teamData ?? []);
+    setCategories(categoryData ?? []); setStadiums(stadiumData ?? []); setPositions(positionData ?? []); setCareers(careerData ?? []);
     setLoading(false);
   }, [kind]);
   useFocusEffect(useCallback(() => { refresh(); return undefined; }, [refresh]));
@@ -52,11 +60,14 @@ export default function ScoringMasters() {
   }), [rows, kind, includeDisabled, includeRetired, teamFilter, search]);
   const valueFor = (row: any, field: string) => {
     let value = row[field];
-    if (field === "team_id" || field === "category_id" || field === "stadium_id") {
-      const options = field === "team_id" ? teams : rows;
+    if (field === "uniform_no") value = careers.find(c => c.roster_player_id === row.id && c.team_id === row.team_id)?.uniform_no ?? value;
+    if (["team_id", "category_id", "stadium_id", "primary_position_id", "family_id"].includes(field)) {
+      const options = field === "team_id" ? teams : field === "category_id" ? categories : field === "stadium_id" ? stadiums : field === "primary_position_id" ? positions : rows;
       value = options.find(item => str(item.id) === str(value))?.name ?? value;
     }
-    if (["display_flag", "retired", "strike_flag", "ball_flag", "out_flag", "last_ball", "batting_flag", "pitcher_flag", "bunt_flag", "and_run_flag", "steal_flag", "sb_flag", "cs_flag"].includes(field)) return bool(value);
+    if (["display_flag", "retired", "is_own_team", "strike_flag", "ball_flag", "out_flag", "last_ball", "batting_flag", "pitcher_flag", "bunt_flag", "and_run_flag", "steal_flag", "sb_flag", "cs_flag"].includes(field)) return value === true ? "○" : value === false ? "—" : str(value);
+    if (["throw_hand", "bat_hand"].includes(field)) return ({R:"右",L:"左",S:"両"} as Record<string,string>)[str(value)] ?? str(value);
+    if (field === "primary_position_id") return ({"1":"投","2":"捕","3":"一","4":"二","5":"三","6":"遊","7":"左","8":"中","9":"右","10":"DH"} as Record<string,string>)[str(row[field])] ?? str(value);
     return str(value);
   };
   const openForm = (id?: string) => router.push((`/scoring/master?kind=${encodeURIComponent(kind)}${id ? `&id=${encodeURIComponent(id)}` : ""}`) as any);

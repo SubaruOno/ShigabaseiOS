@@ -34,6 +34,25 @@ export const localStore = {
   plays: (gameId: string) => read<LocalPlay[]>(`plays:${gameId}`, []),
   rosterPlayers: (teamId: string) => read<Record<string, unknown>[]>(`roster:${teamId}`, []),
   saveRosterPlayers: (teamId: string, players: Record<string, unknown>[]) => write(`roster:${teamId}`, players),
+  replaceLocalPlayerId: async (oldId: string, newId: string) => {
+    const games = await read<LocalGame[]>("games", []);
+    await write("games", games.map(game => ({...game, lineup: ((game.lineup ?? []) as Array<Record<string, any>>).map(row => row.roster_player_id === oldId || row.player_snapshot?.id === oldId ? {...row, roster_player_id: newId, player_snapshot: {...row.player_snapshot, id: newId}} : row)})));
+    const teamIds = [...new Set(games.flatMap(game => [game.home_team_id, game.away_team_id]))];
+    for (const teamId of teamIds) {
+      const players = await read<Record<string, any>[]>(`roster:${teamId}`, []);
+      await write(`roster:${teamId}`, players.map(player => player.id === oldId ? {...player, id: newId, provisional: false} : player));
+    }
+    for (const game of games) {
+      const plays = await read<LocalPlay[]>(`plays:${game.id}`, []);
+      const next = plays.map(play => {
+        const page = JSON.parse(JSON.stringify(play.page)) as any;
+        let changed = false;
+        for (const [key, value] of Object.entries(page.ra ?? {})) if (value && typeof value === "object" && (value as any).player_id === oldId) { (value as any).player_id = newId; changed = true; }
+        return changed ? {...play, page} : play;
+      });
+      if (next.some((play, index) => play !== plays[index])) await write(`plays:${game.id}`, next);
+    }
+  },
   savePlays: (gameId: string, plays: LocalPlay[]) => write(`plays:${gameId}`, plays),
   savePlay: async (gameId: string, page: Page) => { const plays=await read<LocalPlay[]>(`plays:${gameId}`,[]); plays.push({seq:plays.length+1,page,client_mutation_id:uuid(),created_at:new Date().toISOString()}); await write(`plays:${gameId}`,plays); return plays; },
   deviceId: async () => { let id = await read<string | null>("device", null); if (!id) { id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`; await write("device", id); } return id; },
