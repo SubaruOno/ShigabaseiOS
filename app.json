@@ -9,13 +9,19 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.subaruono.shigabaseios",
       "buildNumber": "2",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "資料や映像をアップロードするために写真ライブラリへのアクセスが必要です。",
         "NSUserNotificationsUsageDescription": "新着資料やメッセージをお知らせするために通知を使用します。",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       }
     },
     "android": {
