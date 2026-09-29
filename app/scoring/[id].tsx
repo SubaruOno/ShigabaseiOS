@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Ellipse, G, Line, Path, Polyline, Rect, Text as SvgText } from "react-native-svg";
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { applyPage, blank, batterOf, checkCommit, GameState, moves, Page, pitcherOf, stateAt, teamSetupsFromLineup } from "@/lib/scoring/engine";
@@ -84,7 +84,7 @@ const caption=(x:number,y:number,label:string)=><View pointerEvents="none" style
  const saveErrors=()=>{if(!errorTypes.length){setModal(null);return}edit(p=>p.catch_fielder.push({pos:errorPos,err:errorTypes.join("、")}));setModal(null)};
  const undo=async()=>{if(focusPage===pages.length-1&&focusPage>0){const next=pages.slice(0,-2);next.push(blank());await saveNow(next);setFocusPage(next.length-1)}};
  const pageNav=(idx:number)=>{setFocusPage(Math.max(0,Math.min(idx,pages.length-1)));setHomeOpen(false);setRunnerSel(null);setOpenMenu(null)};
- const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{if(typeof window!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));const {router}=await import("expo-router");router.replace("/scoring" as any)})};
+ const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{if(typeof window!=="undefined"&&typeof (window as any).dispatchEvent==="function"&&typeof Event!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));router.replace("/scoring" as any)})};
  const inningTable=()=>{const next=preview,t=next.half,i0=next.bi[t];return <View><Text style={s.dialogTitle}>イニングの確認</Text><Text style={s.subheading}>{teamNames[t]}　次の打者 {i0+1}番</Text>{next.lu[t].order.map((n,i)=><View key={i} style={[s.tableRow,i===i0&&{backgroundColor:"#20c997"}]}><Text style={i===i0?{color:"#fff"}:undefined}>{i+1}　#{n}　{next.lu[t].bats[i]}</Text></View>)}<Text style={{marginTop:8}}>{teamNames[0]} {next.score[0]}　{teamNames[1]} {next.score[1]}</Text></View>};
  const menuOptions=Object.keys(STRATS);
  const planList=(key:string)=>plans.filter(x=>Number(x.show_index)===(key==="バント"?1:key==="盗塁"?2:3));
