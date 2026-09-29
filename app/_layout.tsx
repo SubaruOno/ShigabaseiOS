@@ -78,6 +78,11 @@ function AppLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
+        <Stack.Screen name="scoring/index" options={{ title: "試合記録", headerBackTitle: "戻る" }} />
+        <Stack.Screen name="scoring/create" options={{ title: "新規試合入力", headerBackTitle: "試合記録" }} />
+        <Stack.Screen name="scoring/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="scoring/master" options={{ title: "マスター管理", headerBackTitle: "戻る" }} />
+        <Stack.Screen name="scoring/manage" options={{ title: "試合管理", headerBackTitle: "試合記録" }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ headerShown: false }} />
