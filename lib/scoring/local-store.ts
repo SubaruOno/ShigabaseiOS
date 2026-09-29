@@ -30,6 +30,8 @@ export const localStore = {
   games: () => read<LocalGame[]>("games", []),
   saveGames: (games: LocalGame[]) => write("games", games),
   plays: (gameId: string) => read<LocalPlay[]>(`plays:${gameId}`, []),
+  rosterPlayers: (teamId: string) => read<Record<string, unknown>[]>(`roster:${teamId}`, []),
+  saveRosterPlayers: (teamId: string, players: Record<string, unknown>[]) => write(`roster:${teamId}`, players),
   savePlays: (gameId: string, plays: LocalPlay[]) => write(`plays:${gameId}`, plays),
   savePlay: async (gameId: string, page: Page) => { const plays=await read<LocalPlay[]>(`plays:${gameId}`,[]); plays.push({seq:plays.length+1,page,client_mutation_id:uuid(),created_at:new Date().toISOString()}); await write(`plays:${gameId}`,plays); return plays; },
   deviceId: async () => { let id = await read<string | null>("device", null); if (!id) { id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`; await write("device", id); } return id; },
