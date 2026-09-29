@@ -88,7 +88,7 @@ export function checkCommit(st: GameState, p: Page): string | null {
 }
 export function stateAt(index: number, pages: Page[], teams: TeamSetup[] = DEFAULT_TEAMS, includePre = false): GameState { const st = initState(teams); for (let i = 0; i < index; i++) applyPage(st, pages[i]); if (includePre && pages[index]) applyPre(st, pages[index]); return st; }
 
-export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;roster_player_id:string;position_id:number;batting_hand?:string|null;throwing_hand?:string|null;uniform_no?:string|null;player_snapshot?:{uniform_no?:number|string;bat_hand?:string;throw_hand?:string;name?:string}}>, teamIds:[string,string], teamNames:[string,string]): TeamSetup[] {
+export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;roster_player_id:string;position_id:number;batting_hand?:string|null;throwing_hand?:string|null;uniform_no?:string|null;player_snapshot?:{uniform_no?:number|string;show_index?:number;bat_hand?:string;throw_hand?:string;name?:string}}>, teamIds:[string,string], teamNames:[string,string]): TeamSetup[] {
   // teamIds[0] is the visiting/first-batting team and therefore bats in the top half.
   return teamIds.map((teamId, index) => {
     const rows=lineup.filter(row=>row.team_id===teamId).sort((a,b)=>a.slot-b.slot);

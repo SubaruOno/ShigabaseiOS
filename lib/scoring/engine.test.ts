@@ -25,6 +25,18 @@ describe('scoring engine mirrors prototype state transitions', () => {
     expect(st.lu[0].order[0]).toBe(44); expect(st.bi[0]).toBe(1); expect(st.bases[0]).toBe(44);
     expect(st.pcount[1]).toBe(4); expect(st.b).toBe(0); expect(checkCommit(stateAt(3, [sub, walk, walk, blank()], DEFAULT_TEAMS, true), walk)).toBeNull();
   });
+  it('applies a pinch hitter in the batting order slot selected from the batter dialog', () => {
+    const p = { ...blank(), subs: [{ t: 0 as const, slot: 0, no: 44, bats: '左' as const, pos: 8 }] };
+    const st = stateAt(1, [p], DEFAULT_TEAMS, true);
+    expect(st.lu[0].order[0]).toBe(44);
+    expect(st.lu[0].bats[0]).toBe('左');
+  });
+  it('applies a pitcher change in the defending P slot selected from the pitcher dialog', () => {
+    const p = { ...blank(), subs: [{ t: 1 as const, slot: 'P' as const, no: 44, throws: '左' as const }] };
+    const st = stateAt(1, [p], DEFAULT_TEAMS, true);
+    expect(st.lu[1].P).toBe(44);
+    expect(st.lu[1].throws).toBe('左');
+  });
   it('pinch runner replaces the runner already on base', () => {
     const st = initState(); setRunner(st, 0, 7);
     const p = { ...blank(), subs: [{ t: 0 as const, slot: 0, no: 44 }] };
