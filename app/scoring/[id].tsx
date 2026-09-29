@@ -24,6 +24,12 @@ const RCOL:Record<string,string>={見送:'#ff8a65',空振:'#e64980',ボール:'#
 const POSN=['','投','捕','一','二','三','遊','左','中','右','DH'];
 const clone=<T,>(x:T):T=>JSON.parse(JSON.stringify(x));
 
+// 画面の部品は関数の外で定義する（中で定義すると描き直しのたびに別の部品とみなされ、全部作り直しになる）
+const ABS=({x,y,w,h=30,children,style}:any)=><View style={[s.a,{left:x,top:y,width:w,height:h},style]}>{children}</View>;
+const Txt=({children,size=14,color="#212529",style}:any)=><Text style={[{fontSize:size,color,includeFontPadding:false},style]}>{children}</Text>;
+const Btn=({x,y,w,h=30,label,bg="#fff",fg="#212529",border="#ced4da",radius=4,size=14,onPress,active=false,disabled=false}:any)=><TouchableOpacity onPress={onPress} disabled={disabled} style={[s.a,s.button,{left:x,top:y,width:w,height:h,backgroundColor:active?"#20c997":bg,borderColor:active?"#20c997":border,borderRadius:radius}]}><Text numberOfLines={1} style={{fontSize:size,color:active?"#fff":fg,textAlign:"center",includeFontPadding:false}}>{label}</Text></TouchableOpacity>;
+const Pill=({x,y,w,label,onPress,active,color="#4c9aff"}:any)=><TouchableOpacity onPress={onPress} style={[s.a,s.pill,{left:x,top:y,width:w,height:30,backgroundColor:active?color:"#fff",borderColor:active?color:"#ced4da"}]}><Txt size={13} color={active?"#fff":"#212529"}>{label}</Txt></TouchableOpacity>;
+const Field=({x,y,w,h,value,onPress,size=14,pad}:any)=><Pressable onPress={onPress} style={[s.a,s.fld,{left:x,top:y,width:w,height:h},pad!=null&&{paddingHorizontal:pad}]}><Txt size={size} numberOfLines={1}>{value}</Txt></Pressable>;
 export default function ScoringInput(){
  const {id=""}=useLocalSearchParams<{id:string}>();const {user,isLoading,hasRole}=useAuth();const {width,height}=useWindowDimensions();
  const [game,setGame]=useState<LocalGame|null>(null),[pages,setPages]=useState<Page[]>([]),[results,setResults]=useState<Row[]>([]),[teams,setTeams]=useState<Row[]>([]),[roster,setRoster]=useState<Row[]>([]),[ballTypes,setBallTypes]=useState<Row[]>([]),[plans,setPlans]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
@@ -61,11 +67,6 @@ export default function ScoringInput(){
  useEffect(()=>{if(!swOn)return;const t=setInterval(()=>{const ms=Date.now()-swStart+swElapsed;setTimer(`${String(Math.floor(ms/60000)).padStart(2,"0")}:${String(Math.floor(ms/1000)%60).padStart(2,"0")}.${String(Math.floor(ms%1000/10)).padStart(2,"0")}`)},50);return()=>clearInterval(t)},[swOn,swStart,swElapsed]);
  const toggleWatch=()=>{if(swOn){setSwElapsed(Date.now()-swStart+swElapsed);setSwOn(false)}else{setSwStart(Date.now());setSwOn(true)}};
  if(isLoading||loading)return <View style={s.center}><Text>読み込み中…</Text></View>;if(!user)return <Redirect href="/login"/>;if(!hasRole("analyst")&&!hasRole("admin"))return <Redirect href="/(tabs)"/>;if(!game)return <View style={s.center}><Text>試合が見つかりません。{error}</Text></View>;
- const ABS=({x,y,w,h=30,children,style}:any)=><View style={[s.a,{left:x,top:y,width:w,height:h},style]}>{children}</View>;
- const Txt=({children,size=14,color="#212529",style}:any)=><Text style={[{fontSize:size,color,includeFontPadding:false},style]}>{children}</Text>;
- const Btn=({x,y,w,h=30,label,bg="#fff",fg="#212529",border="#ced4da",radius=4,size=14,onPress,active=false,disabled=false}:any)=><TouchableOpacity onPress={onPress} disabled={disabled} style={[s.a,s.button,{left:x,top:y,width:w,height:h,backgroundColor:active?"#20c997":bg,borderColor:active?"#20c997":border,borderRadius:radius}]}><Text numberOfLines={1} style={{fontSize:size,color:active?"#fff":fg,textAlign:"center",includeFontPadding:false}}>{label}</Text></TouchableOpacity>;
- const Pill=({x,y,w,label,onPress,active,color="#4c9aff"}:any)=><TouchableOpacity onPress={onPress} style={[s.a,s.pill,{left:x,top:y,width:w,height:30,backgroundColor:active?color:"#fff",borderColor:active?color:"#ced4da"}]}><Txt size={13} color={active?"#fff":"#212529"}>{label}</Txt></TouchableOpacity>;
- const Field=({x,y,w,h,value,onPress,size=14,pad}:any)=><Pressable onPress={onPress} style={[s.a,s.fld,{left:x,top:y,width:w,height:h},pad!=null&&{paddingHorizontal:pad}]}><Txt size={size} numberOfLines={1}>{value}</Txt></Pressable>;
  // 試作の .cap と同じ：枠の上端の線に重なる見出し（呼び出し側の y は試作の top+18）
 const caption=(x:number,y:number,label:string)=><View pointerEvents="none" style={[s.a,{left:x,top:y-18,backgroundColor:"#fff",paddingHorizontal:3,zIndex:5}]}><Txt size={13} style={{fontWeight:"700",lineHeight:18}}>{label}</Txt></View>;
  const scaleSvg=(x:number,y:number,w:number,h:number)=><View style={{position:"absolute",left:x,top:y,width:w*scale,height:h*scale,overflow:"hidden"}} />;
