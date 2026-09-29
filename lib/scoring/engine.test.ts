@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { applyPage, blank, checkCommit, DEFAULT_TEAMS, GameState, initState, Page, stateAt } from './engine';
+import { applyPage, blank, checkCommit, DEFAULT_TEAMS, GameState, initState, Page, pitcherOf, batterOf, stateAt, teamSetupsFromLineup } from './engine';
 
 const page = (label: string, kind: string | number, extra: Partial<Page> = {}): Page => ({ ...blank(), res: { label, kind }, ...extra });
 const run = (...pages: Page[]): GameState => stateAt(pages.length, pages);
 const setRunner = (st: GameState, base: number, player = 90 + base) => { st.bases[base] = player; };
 
 describe('scoring engine mirrors prototype state transitions', () => {
+  it('maps visiting lineup to top offense and home P slot to top-half pitcher', () => {
+    const teams = teamSetupsFromLineup([
+      { team_id: 'away', slot: 1, roster_player_id: 'a1', position_id: 8, uniform_no: '7' },
+      { team_id: 'away', slot: 10, roster_player_id: 'ap', position_id: 1, uniform_no: '18' },
+      { team_id: 'home', slot: 1, roster_player_id: 'h1', position_id: 6, uniform_no: '2' },
+      { team_id: 'home', slot: 10, roster_player_id: 'hp', position_id: 1, uniform_no: '31' },
+    ], ['away', 'home'], ['訪問', 'ホーム']);
+    const st = initState(teams);
+    expect([batterOf(st), pitcherOf(st)]).toEqual([7, 31]);
+    st.half = 1;
+    expect([batterOf(st), pitcherOf(st)]).toEqual([2, 18]);
+  });
   it('pinch hitter then four balls ends PA and advances the pinch hitter', () => {
     const sub = { ...blank(), subs: [{ t: 0 as const, slot: 0, no: 44, bats: '右' as const }] };
     const walk = page('ボール', 'B');
