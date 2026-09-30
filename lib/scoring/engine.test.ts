@@ -6,6 +6,12 @@ const run = (...pages: Page[]): GameState => stateAt(pages.length, pages);
 const setRunner = (st: GameState, base: number, player = 90 + base) => { st.bases[base] = player; };
 
 describe('scoring engine mirrors prototype state transitions', () => {
+  it('initializes a played inning at zero on the linescore', () => {
+    const st=initState();applyPage(st,page('見逃し','S'));
+    expect(st.line[0][0]).toBe(0);
+    st.half=1;applyPage(st,page('見逃し','S'));
+    expect(st.line[1][0]).toBe(0);
+  });
   it('maps visiting lineup to top offense and home P slot to top-half pitcher', () => {
     const teams = teamSetupsFromLineup([
       { team_id: 'away', slot: 1, roster_player_id: 'a1', position_id: 8, uniform_no: '7' },

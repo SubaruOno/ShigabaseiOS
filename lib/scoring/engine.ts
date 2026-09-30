@@ -64,6 +64,8 @@ export function applyPre(st: GameState, p: Page) {
 export function three(st: GameState) { if (st.outs >= 3) { st.outs = 0; st.b = 0; st.s = 0; st.bases = [null, null, null]; st.subHalf[st.half] = []; if (st.half) { st.half = 0; st.inn++; } else st.half = 1; } }
 export function applyPage(st: GameState, p: Page) {
   applyPre(st, p); const team = st.half, batter = batterOf(st), pitcher = pitcherOf(st), mv = moves(st, p);
+  // A played inning has a zero on the linescore even before its first run.
+  st.line[team][st.inn - 1] ??= 0;
   const moveRunners = () => { let runs = 0; const next: (number | null)[] = [null, null, null];
     for (let i = 3; i >= 1; i--) { const id = st.bases[i - 1]; if (id == null) continue; const a = mv[i]; if (!a || (!a.out && !a.to)) { next[i - 1] = id; continue; } if (a.out) { st.outs++; continue; } if ((a.to || 0) >= 4) { if (!a.homeOut) runs++; else st.outs++; } else if (a.to) next[a.to - 1] = id; }
     const b = mv[0]; if (b?.out) st.outs++; else if (b?.to) { if (b.to >= 4) { if (!b.homeOut) runs++; else st.outs++; } else next[b.to - 1] = batter; }
