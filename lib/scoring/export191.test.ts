@@ -42,7 +42,7 @@ describe('191-column export',()=>{
       {seq:2,page:page({subs:[{t:1,slot:2,no:12,pos:2}],res:null})},
       {seq:3,page:page({skip:true,ra:{0:{out:true}}})},
     ],{});
-    expect(rows[0][40]).toBe('牽制');expect(rows[0][52]).toBe('1塁牽制');
+    expect(rows[0][40]).toBe('牽制');expect(rows[0][52]).toBe('一塁牽制');
     expect(rows[1][40]).toBe('交代');
     expect(rows[2][40]).toBe('投球');expect(rows[2][42]).toBe(0);expect(rows[2][43]).toBe(0);expect(rows[2][44]).toBe('0');
   });

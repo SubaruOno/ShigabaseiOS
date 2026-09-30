@@ -15,7 +15,7 @@ export type TeamSetup = { name: string; order: number[]; pos: number[]; bats: Ha
 export type GameState = {
   inn: number; half: 0 | 1; score: [number, number]; hits: [number, number]; bb: [number, number]; err: [number, number]; line: [number[], number[]];
   outs: number; b: number; s: number; bases: (number | null)[]; bi: [number, number];
-  pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; gone: [number[], number[]]; subHalf: [number[], number[]]; lu: TeamSetup[];
+  pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; gone: [number[], number[]]; ph: [number[], number[]]; pr: [number[], number[]]; subHalf: [number[], number[]]; lu: TeamSetup[];
 };
 // 新しいページは最初から旧Excelの座標（ポイント）で入れるので、読み込み時に変換し直されないよう印を付けておく
 export const blank = (): Page => ({ coords_version: 'legacy-excel-v1', subs: [], tb: null, pitch_type: null, course: null, catcher_mitt_position: 0, ball_speed: '', res: null, flags: [], plan: {}, batted_ball: null, feature: 0, rank: null, catch_fielder: [], ra: {}, pickoff_throw_to: 0, skip: false, skipOut: null, memo: '', time: null, handP: null, handB: null });
@@ -25,14 +25,14 @@ export const DEFAULT_TEAMS: TeamSetup[] = [
 ];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 export function initState(teams: TeamSetup[] = DEFAULT_TEAMS): GameState {
-  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], bb: [0, 0], err: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, gone: [[], []], subHalf: [[], []], lu: clone(teams) };
+  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], bb: [0, 0], err: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, gone: [[], []], ph: [[], []], pr: [[], []], subHalf: [[], []], lu: clone(teams) };
 }
 export const batterOf = (st: GameState): number => st.lu[st.half].order[st.bi[st.half]];
 export const pitcherOf = (st: GameState): number => st.lu[1 - st.half].P;
 // 球数は「守っているチーム×1000＋背番号」で数える（両チームに同じ背番号の投手がいても混ざらない）
 export const pitchKey = (defTeam: number, no: number): number => defTeam * 1000 + no;
 export const pitchesOf = (st: GameState, no: number = pitcherOf(st), defTeam: number = 1 - st.half): number => st.pcount[pitchKey(defTeam, no)] ?? 0;
-function endPA(st: GameState, text: string) { const team = st.half, no = batterOf(st), key = `${team}-${no}`; (st.paLog[key] ??= []).push(text); st.bi[team] = (st.bi[team] + 1) % 9; st.b = 0; st.s = 0; }
+function endPA(st: GameState, text: string) { const team = st.half, no = batterOf(st), key = `${team}-${no}`; if (st.ph) st.ph[team] = st.ph[team].filter(x => x !== st.bi[team]); (st.paLog[key] ??= []).push(text); st.bi[team] = (st.bi[team] + 1) % 9; st.b = 0; st.s = 0; }
 function addRun(st: GameState, n: number) { if (!n) return; st.score[st.half] += n; const line = st.line[st.half]; line[st.inn - 1] = (line[st.inn - 1] || 0) + n; }
 export function autoMoves(st: GameState, p: Page): Record<number, Move> {
   const k = p.res?.kind, m: Record<number, Move> = {};
@@ -62,12 +62,13 @@ export function moves(st: GameState, p: Page): Record<number, Move> {
 }
 export function applyPre(st: GameState, p: Page) {
   for (const c of p.subs || []) { const lineup = st.lu[c.t]; if (c.slot === 'P') { if (c.no != null && c.no !== lineup.P) { const oldP = lineup.P; lineup.P = c.no; if (!lineup.order.includes(oldP)) st.gone[c.t].push(oldP); } if (c.throws) lineup.throws = c.throws; continue; }
-    const old = lineup.order[c.slot]; if (c.no != null && c.no !== old) { lineup.order[c.slot] = c.no; if (!lineup.order.includes(old) && lineup.P !== old) st.gone[c.t].push(old); if (c.bats) lineup.bats[c.slot] = c.bats; if (c.t === st.half) st.bases = st.bases.map(id => id === old ? c.no : id); st.subHalf[c.t].push(c.slot); }
+    const old = lineup.order[c.slot]; if (c.no != null && c.no !== old) { lineup.order[c.slot] = c.no; if (!lineup.order.includes(old) && lineup.P !== old) st.gone[c.t].push(old); if (c.bats) lineup.bats[c.slot] = c.bats; // 代走（塁上の選手を代えた）と代打（今の打者の枠を代えた）を分けて覚える。旧Excelの R・H の印に使う
+      if (c.t === st.half) { if (st.bases.includes(old)) (st.pr ??= [[], []])[c.t].push(c.slot); else if (c.slot === st.bi[c.t]) (st.ph ??= [[], []])[c.t].push(c.slot); st.bases = st.bases.map(id => id === old ? c.no : id); } st.subHalf[c.t].push(c.slot); }
     if (c.pos != null) lineup.pos[c.slot] = c.pos;
   }
   if (p.tb) { const lineup = st.lu[st.half]; st.tie = true; st.bi[st.half] = p.tb.bi; st.bases = p.tb.r.map(i => i == null ? null : lineup.order[i]); st.b = p.tb.b || 0; st.s = p.tb.s || 0; st.outs = p.tb.o || 0; }
 }
-export function three(st: GameState) { if (st.outs >= 3) { st.outs = 0; st.b = 0; st.s = 0; st.bases = [null, null, null]; st.subHalf[st.half] = []; if (st.half) { st.half = 0; st.inn++; } else st.half = 1; } }
+export function three(st: GameState) { if (st.outs >= 3) { st.outs = 0; st.b = 0; st.s = 0; st.bases = [null, null, null]; st.subHalf[st.half] = []; if (st.pr) st.pr[st.half] = []; if (st.ph) st.ph[st.half] = []; if (st.half) { st.half = 0; st.inn++; } else st.half = 1; } }
 export function applyPage(st: GameState, p: Page) {
   applyPre(st, p); const team = st.half, batter = batterOf(st), pitcher = pitcherOf(st), mv = moves(st, p);
   // A played inning has a zero on the linescore even before its first run.

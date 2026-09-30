@@ -1,4 +1,4 @@
-import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf, moves } from './engine';
+import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf, moves, Hand } from './engine';
 import { convertSavedPageCoordinates } from './coords';
 
 // Saved-file order from the 191-column values survey, not the input template order.
@@ -14,25 +14,31 @@ export const COLUMN191_HEADERS = [
 ] as const;
 
 export type GameExportInfo = { dateTime: string; season: string; kind: string; week: string; day: string; gameNumber: number; homeTeam: string; awayTeam: string; umpire?: string; scorer?: string; startPlayNo?: number; pitcherNames: [string,string]; catcherNames: [string,string]; lineupNames: [string[],string[]]; lineupPositions: [string[],string[]]; lineupNos?: [number[],number[]]; playerNames?: [Record<string,string>,Record<string,string>]; hands: [string[],string[]]; pitcherHands: [string,string]; };
-export type PlayExportInfo = { result?: string; result2?: string; pitchType?: string; pitchSpeed?: number; pitchCount?:number; course?: [number,number]; ballType?: string; ballRank?: string; ballXY?: [number,number]; featureName?: string; pitchSetup?: number; runnerStatus?: [string,string,string]; batterStatus?: string; playType?: string; catchFielder?: string; operation?: string; operationDetail?: string; operationResult?: string; pickoffDetail?: string; pickoffStrength?: string; quick?: string; handB?:string; skipPa?: boolean; };
+export type PlayExportInfo = { errorLabel?: string; dateTime?: string; paEnd?: boolean; inning?: string; gameMark?: string; result?: string; result2?: string; pitchType?: string; pitchSpeed?: number; pitchCount?:number; course?: [number,number]; ballType?: string; ballRank?: string; ballXY?: [number,number]; featureName?: string; pitchSetup?: number; runnerStatus?: [string,string,string]; batterStatus?: string; playType?: string; catchFielder?: string; operation?: string; operationDetail?: string; operationResult?: string; pickoffDetail?: string; pickoffStrength?: string; quick?: string; handB?:string; skipPa?: boolean; };
 
-const posCode = (n: number) => n === 10 ? 'D' : n >= 1 && n <= 9 ? String(n) : '';
+// 守備の印：1〜9、D（DH）、H（代打で守備未定）、R（代走で守備未定）
+const posCode = (n: number) => n === 10 ? 'D' : n === 11 ? 'H' : n === 12 ? 'R' : n >= 1 && n <= 9 ? String(n) : '';
 export function export191Row(st: GameState, page: Page, info: GameExportInfo, playNo: number, play: PlayExportInfo = {}): (string|number)[] {
   const row: (string|number)[] = Array(191).fill('');
   const put = (col: number, val: string|number|undefined|null) => { row[col-1] = val ?? ''; };
   const side = st.half, batNo = st.bi[side], batter = batterOf(st), pitcher = pitcherOf(st);
   const nameFor=(team:number,no:number|null)=>no==null?'':info.playerNames?.[team]?.[String(no)]??info.lineupNames[team][info.lineupNos?.[team].indexOf(no)??-1]??String(no);
-  put(1,info.dateTime);put(2,info.season);put(3,info.kind);put(4,info.week);put(5,info.day);put(6,info.gameNumber);put(7,info.umpire);
+  put(1,play.dateTime??info.dateTime);put(2,info.season);put(3,info.kind);put(4,info.week);put(5,info.day);put(6,info.gameNumber);put(7,info.umpire);
   put(8,info.homeTeam);put(9,info.awayTeam);put(10,playNo);put(11,st.inn);put(12,side===0?'表':'裏');put(13,st.score[0]);put(14,st.score[1]);put(15,st.s);put(16,st.b);put(17,st.outs);
-  put(18,play.skipPa||!!page.res?.kind&&(['out','sac','sf','io',1,2,3,4,'IBB','hbp'].includes(page.res.kind as never)||page.res.kind==='B'&&st.b>=3||page.res.kind==='S'&&st.s>=2)?'打席完了':'打席継続');put(19,st.inn===1&&playNo===(info.startPlayNo??1)?'イニング開始':'イニング継続');put(20,playNo===(info.startPlayNo??1)?'試合開始':play.playType==='試合終了'?'試合終了':'試合継続');
-  st.bases.forEach((id,i)=>{if(id==null){put(21+i*2,0);put(22+i*2,0);put(37+i,0);return}const slot=info.lineupNos?.[side].indexOf(Number(id))??-1;put(21+i*2,slot>=0?(st.subHalf[side].includes(slot)?'R':slot+1):'R');put(22+i*2,nameFor(side,id));put(37+i,play.runnerStatus?.[i] || '継続');});
-  put(27,st.subHalf[side].includes(batNo)?'H':batNo+1);put(28,nameFor(side,batter));put(29,st.lu[side].bats[batNo]==='両'?play.handB??info.hands[side][batNo]:st.lu[side].bats[batNo]);put(30,play.operation??0);put(31,play.operationDetail??0);put(32,play.operationResult??0);put(33,nameFor(1-side,pitcher));put(34,st.lu[1-side].throws);put(35,play.pitchCount??st.pcount[(1-side)*1000+pitcher]??0);const catcherSlot=st.lu[1-side].pos.indexOf(2);put(36,catcherSlot>=0?nameFor(1-side,st.lu[1-side].order[catcherSlot]):0);put(40,play.batterStatus??0);put(41,play.playType || '投球');put(42,play.pitchSetup??0);put(43,play.course?.[0]??0);put(44,play.course?.[1]??0);put(45,play.pitchType??0);put(46,play.result??0);put(47,play.result2??0);put(48,play.catchFielder??0);put(49,play.featureName??0);put(50,play.ballRank??0);put(51,play.ballXY?.[0]??0);put(52,play.ballXY?.[1]??0);put(53,page.pickoff_throw_to?`${page.pickoff_throw_to}塁牽制`:0);put(54,play.pickoffDetail??0);put(55,0);put(56,0);put(57,play.pitchSpeed??0);
+  // 打席・イニング・試合の区切りは、この行を入れたあとの状況と比べて決める（export191Game が渡す）
+  put(18,play.paEnd?'打席完了':'打席継続');put(19,play.inning??'イニング継続');put(20,play.gameMark??'試合継続');
+  st.bases.forEach((id,i)=>{if(id==null){put(21+i*2,0);put(22+i*2,0);put(37+i,0);return}const slot=st.lu[side].order.indexOf(Number(id));put(21+i*2,slot>=0?(st.pr?.[side]?.includes(slot)?'R':slot+1):'R');put(22+i*2,nameFor(side,id));put(37+i,play.runnerStatus?.[i] || '継続');});
+  put(27,st.ph?.[side]?.includes(batNo)?'H':batNo+1);put(28,nameFor(side,batter));put(29,st.lu[side].bats[batNo]==='両'?play.handB??info.hands[side][batNo]:st.lu[side].bats[batNo]);put(30,play.operation??0);put(31,play.operationDetail??0);put(32,play.operationResult??0);put(33,nameFor(1-side,pitcher));put(34,st.lu[1-side].throws);// 球数は、それまでの球数＋1（旧Excelは牽制・交代の行でも「次の球の番号」を入れる）
+  const thisPitch=1;put(35,play.pitchCount??(st.pcount[(1-side)*1000+pitcher]??0)+thisPitch);const catcherSlot=st.lu[1-side].pos.indexOf(2);put(36,catcherSlot>=0?nameFor(1-side,st.lu[1-side].order[catcherSlot]):'');put(40,play.batterStatus??0);put(41,play.playType || '投球');put(42,play.pitchSetup??0);put(43,play.course?.[0]??0);put(44,play.course?.[1]??0);put(45,play.pitchType??0);put(46,play.result??0);put(47,play.result2??0);put(48,play.catchFielder??0);put(49,play.featureName??0);put(50,play.ballRank??0);put(51,play.ballXY?.[0]??0);put(52,play.ballXY?.[1]??0);put(53,page.pickoff_throw_to?`${['','一','二','三'][page.pickoff_throw_to]}塁牽制`:0);put(54,play.pickoffDetail??0);put(55,play.errorLabel??0);put(56,0);put(57,play.pitchSpeed??0);
   for(let team=0;team<2;team++){const base=team===0?58:77;for(let slot=0;slot<9;slot++){put(base+slot*2,posCode(st.lu[team].pos[slot]));put(base+slot*2+1,nameFor(team,st.lu[team].order[slot]));}put(team===0?76:95,nameFor(team,st.lu[team].P));}
-  for(let team=0;team<2;team++){const start=team===0?96:116;for(let slot=0;slot<9;slot++){put(start+slot*2+1,st.lu[team].bats[slot]);put(start+slot*2+2,0);}put(team===0?114:134,st.lu[team].throws);}
-  for(let i=0;i<15;i++){put(137+i,st.line[0][i]??'');put(152+i,st.line[1][i]??'');}
+  for(let team=0;team<2;team++){const start=team===0?96:116;// 各打順は「○打」（左右）と「タイプ」（空）の2列。1番の○打が96列目（後攻は116列目）
+    for(let slot=0;slot<9;slot++){put(start+slot*2,st.lu[team].bats[slot]);put(start+slot*2+1,'');}put(team===0?114:134,st.lu[team].throws);}
+  // スコアボードは、終わった表・裏だけ書く（進行中の回は空）
+  const done=(t:number,i:number)=>i+1<st.inn||(i+1===st.inn&&t<side);const cell=(t:number,i:number)=>done(t,i)?st.line[t][i]??0:(i+1===st.inn&&t===side&&(st.line[t][i]??0)>0?st.line[t][i]:'');
+  for(let i=0;i<15;i++){put(137+i,cell(0,i));put(152+i,cell(1,i));}
   // Columns 175-181 are current defending 1B through RF player names.
   for(let pos=3;pos<=9;pos++){const slot=st.lu[1-side].pos.findIndex(v=>v===pos);put(172+pos,slot>=0?nameFor(1-side,st.lu[1-side].order[slot]):'');}
-  put(182,info.scorer);put(183,side===0?info.awayTeam:info.homeTeam);put(190,play.quick??0);put(191,play.pickoffStrength??0);
+  put(182,info.scorer);put(190,page.flags?.includes('クイック')?'クイック':0);put(136,0);put(191,'');put(191,play.pickoffStrength??'');
   if(play.skipPa){ put(41,'投球');put(45,'0');put(43,0);put(44,0);put(46,play.result);put(40,play.batterStatus); }
   return row;
 }
@@ -47,6 +53,8 @@ export type Export191Lineup = { team_id: string; slot: number; position_id: numb
 export type Export191Play = { seq: number; page: Page };
 export type Export191Masters = { ballTypes?: Array<{ name: string; old_excel_label?: string | null }>; results?: Array<{ id?: string; name?: string; old_excel_label?: string | null }>; plans?: Array<{ id?: string; name?: string; old_excel_label?: string | null }>; players?: Array<{team_id?:string;name?:string;uniform_no?:string|number;show_index?:string|number}> };
 
+// 利き手は L/R/S（マスタ）でも 左/右/両（旧Excel）でも受け取る
+const handJa=(h?:string|null):Hand=>h==='L'||h==='左'?'左':h==='S'||h==='両'?'両':'右';
 /** Build the saved-file-order rows from the local scoring model. */
 export function export191Game(game: Export191Game, lineup: Export191Lineup[], plays: Export191Play[], masters: Export191Masters = {}): (string|number)[][] {
   const ids: [string,string] = [game.away_team_id ?? 'away', game.home_team_id ?? 'home'];
@@ -56,23 +64,25 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
   const no = (r: Export191Lineup | undefined, slot: number) => Number(r?.uniform_no ?? r?.player_snapshot?.uniform_no ?? r?.player_snapshot?.show_index ?? slot + 1);
   const slots = (team: string) => Array.from({length:9},(_,i)=>rows.find(r=>r.team_id===team&&r.slot===i+1));
   const pitcher = (team: string) => rows.find(r=>r.team_id===team&&r.slot===10) ?? rows.find(r=>r.team_id===team&&r.position_id===1);
-  const setup: TeamSetup[] = ids.map((id,i)=>({name:teams[i],order:slots(id).map((r,s)=>no(r,s)),pos:slots(id).map(r=>r?.position_id??10),bats:slots(id).map(r=>r?.batting_hand==='L'?'左':r?.batting_hand==='S'?'両':'右'),P:no(pitcher(id),0),throws:pitcher(id)?.throwing_hand==='L'?'左':'右'}));
+  const setup: TeamSetup[] = ids.map((id,i)=>({name:teams[i],order:slots(id).map((r,s)=>no(r,s)),pos:slots(id).map(r=>r?.position_id??10),bats:slots(id).map(r=>handJa(r?.batting_hand)),P:no(pitcher(id),0),throws:handJa(pitcher(id)?.throwing_hand)==='左'?'左':'右'}));
   const info: GameExportInfo = {
     dateTime: game.dateTime ?? `${game.game_date ?? ''}${game.game_time ? ` ${game.game_time}` : ''}`,
     season: game.season ?? '', kind: game.kind ?? '', week: String(game.week ?? ''), day: String(game.day ?? ''), gameNumber: Number(game.game_number ?? game.gameNumber ?? 0),
-    homeTeam: teams[1], awayTeam: teams[0], umpire: game.umpire,
+    homeTeam: teams[1], awayTeam: teams[0], umpire: game.umpire, scorer: (game as any).scorer,
     pitcherNames: [name(pitcher(ids[0])),name(pitcher(ids[1]))],
     catcherNames: ids.map(id=>name(rows.find(r=>r.team_id===id&&r.position_id===2))) as [string,string],
     lineupNames: ids.map(id=>slots(id).map(name)) as [string[],string[]],
     lineupPositions: ids.map(id=>slots(id).map(r=>String(r?.position_id ?? 0))) as [string[],string[]],
     lineupNos: ids.map(id=>slots(id).map((r,s)=>no(r,s))) as [number[],number[]],
     playerNames: ids.map((id,t)=>Object.fromEntries([...rows.filter(r=>r.team_id===id).map(r=>[String(no(r,(r.slot??1)-1)),name(r)] as const),...(masters.players??[]).filter(p=>p.team_id===id&&p.name).map(p=>[String(Number(p.uniform_no??p.show_index)),String(p.name)] as const)])) as [Record<string,string>,Record<string,string>],
-    hands: ids.map(id=>slots(id).map(r=>r?.batting_hand==='L'?'左':'右')) as [string[],string[]],
-    pitcherHands: ids.map(id=>pitcher(id)?.throwing_hand==='L'?'左':'右') as [string,string],
+    hands: ids.map(id=>slots(id).map(r=>handJa(r?.batting_hand))) as [string[],string[]],
+    pitcherHands: ids.map(id=>handJa(pitcher(id)?.throwing_hand)==='左'?'左':'右') as [string,string],
   };
   const clean = plays;
   return clean.map((item,index)=>{
-    const before=stateAt(index,clean.map(x=>x.page),setup,true);
+    // 「交代」の行は、旧Excelでは交代前の選手のまま書き、次の行から新しい選手になる
+    const subRow=(item.page as any).rowType==='交代';
+    const before=stateAt(index,clean.map(x=>x.page),setup,!subRow);
     const p=convertSavedPageCoordinates(item.page);
     const result = p.res ? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
     const pitchType = p.pitch_type ? masters.ballTypes?.find(x=>x.name===p.pitch_type)?.old_excel_label ?? p.pitch_type : undefined;
@@ -81,9 +91,14 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     const fielder=(f: number|{pos:number;err?:string})=>typeof f==='number'? defender.order[defender.pos.indexOf(f)] : defender.order[defender.pos.indexOf(f.pos)];
     // 走者の動きは、結果から自動で決まる分も含めて書く（旧マクロは「本進」の数を打点として数える）
     const mv=moves(before,p) as Record<number,{to?:number;out?:boolean}>;
-    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,ballRank:p.rank??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':p.subs.length&&!p.res?'交代':'投球',catchFielder:p.catch_fielder.map(f=>String(fielder(f)??'')).filter(Boolean).join('、'),operation:planNames[0],operationDetail:planNames[1],handB:p.handB??undefined,skipPa:p.skip,runnerStatus:[1,2,3].map(base=>{const m=mv[base];return before.bases[base-1]==null?undefined:m?.out?'アウト':m?.to===2?'二進':m?.to===3?'三進':(m?.to??0)>=4?'本進':p.ra[base]?.back?'残留':undefined}) as [string,string,string],batterStatus:mv[0]?.out?'アウト':mv[0]?.to===1?'出塁':mv[0]?.to===2?'二進':mv[0]?.to===3?'三進':(mv[0]?.to??0)>=4?'本進':undefined,quick:undefined};
+    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,ballRank:p.rank??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:(p as any).featureLabel??({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':(p as any).rowType??(p.subs.length&&!p.res?'交代':'投球'),// 旧Excelの捕球選手は、最初に捕った野手の守備番号（1〜9）
+    catchFielder:p.catch_fielder.length?String(typeof p.catch_fielder[0]==='number'?p.catch_fielder[0]:p.catch_fielder[0].pos):'0',errorLabel:(p as any).errorLabel,operation:planNames[0],operationResult:(p as any).planResult,dateTime:p.time&&info.dateTime?`${(p as any).date??String(info.dateTime).slice(0,10)} ${p.time}`:undefined,pickoffDetail:(p as any).pickoffDetail,operationDetail:planNames[1],handB:p.handB??undefined,skipPa:p.skip,runnerStatus:[1,2,3].map(base=>{const m=mv[base];return before.bases[base-1]==null?undefined:m?.out?(p.ra[base] as any)?.outLabel??(p.pickoff_throw_to?'投手牽制死':'封殺'):m?.to===2?'二進':m?.to===3?'三進':(m?.to??0)>=4?'本進':(p.ra[base] as any)?.back&&((p.ra[base] as any).hold??['out','sac','sf','e','fc',1,2,3].includes(p.res?.kind as never))?'残留':undefined}) as [string,string,string],batterStatus:mv[0]?.out?'アウト':mv[0]?.to===1?'出塁':mv[0]?.to===2?'二進':mv[0]?.to===3?'三進':(mv[0]?.to??0)>=4?'本進':undefined,quick:undefined};
+    const after=structuredClone(before);applyPage(after,p);
+    play.paEnd=after.bi[before.half]!==before.bi[before.half];
+    const prevBefore=index>0?stateAt(index-1,clean.map(x=>x.page),setup,true):null;const startHalf=!prevBefore||prevBefore.half!==before.half||prevBefore.inn!==before.inn;
+    play.inning=after.half!==before.half||after.inn!==before.inn?'イニング完了':startHalf?'イニング開始':'イニング継続';
+    play.gameMark=index===0?'試合開始':index===clean.length-1?'試合終了':'試合継続';
     const row=export191Row(before,p,info,item.seq,play);
-    applyPage(before,p);
     return row;
   });
 }

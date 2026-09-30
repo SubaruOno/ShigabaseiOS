@@ -12,29 +12,33 @@ export type Imported191Game = {
 const value=(row:Saved191Row,col:number)=>row[col-1] == null?'':String(row[col-1]);
 const number=(row:Saved191Row,col:number)=>Number(value(row,col))||0;
 const hand=(s:string):Hand|null=>s==='左'?'左':s==='両'?'両':s==='右'?'右':null;
-const positions:Record<string,number>={P:1,C:2,'1B':3,'2B':4,'3B':5,SS:6,LF:7,CF:8,RF:9,D:10};
+const positions:Record<string,number>={P:1,C:2,'1B':3,'2B':4,'3B':5,SS:6,LF:7,CF:8,RF:9,D:10,H:11,R:12};
 const resultKind:Record<string,string|number>={見逃し:'FO',空振り:'FO',ボール:'B',ファール:'FO',ファウル:'FO',ハーフスイング:'FO',見逃し三振:'io',空振り三振:'io',単打:1,二塁打:2,三塁打:3,本塁打:4,ランニング本塁打:4,四球:'B',敬遠:'IBB',死球:'hbp',凡打死:'out',凡打出塁:'e',ファールフライ:'out',犠打:'sac',犠飛:'sf',エラー:'e',野手選択:'fc',振り逃げ:'e',スリーバント失敗:'io',打撃妨害:'io',守備妨害:'io',走塁妨害:'io',ボーク:'BK'};
 
 /** Convert rows in saved-file order into editable game, lineup and page objects. */
-export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN191_HEADERS):Imported191Game {
+// keepNames: 旧Excelの選手名・チーム名をそのまま残す（アプリで取り込むときはこちら）。false はテスト用に仮の名前へ置き換える
+export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN191_HEADERS, opts:{keepNames?:boolean}={}):Imported191Game {
   if(headers.length!==191) throw new Error('191列の見出しが必要です');
   const data=rows.filter(r=>r.some(v=>v!=null&&v!==''));
   if(!data.length) throw new Error('取込対象のプレイ行がありません');
   const first=data[0];
-  const game={dateTime:value(first,1),season:value(first,2),kind:value(first,3),week:value(first,4),day:value(first,5),gameNumber:number(first,6),umpire:value(first,7),homeTeam:'home',awayTeam:'away'};
+  const game={dateTime:value(first,1),season:value(first,2),kind:value(first,3),week:value(first,4),day:value(first,5),gameNumber:number(first,6),umpire:value(first,7),scorer:value(first,182),homeTeam:opts.keepNames?value(first,8):'home',awayTeam:opts.keepNames?value(first,9):'away'};
+  const realName=new Map<string,string>();
   const lineupByTeam=[new Map<string,{no:number;pos:number;bat:Hand|null;throw:Hand|null;slot:number}>(),new Map<string,{no:number;pos:number;bat:Hand|null;throw:Hand|null;slot:number}>()];
   const currentSlots=[new Map<number,string>(),new Map<number,string>()];
   const playerIds=[new Map<string,number>(),new Map<string,number>()];
-  const safeName=(t:number,nm:string)=>{let id=playerIds[t].get(nm);if(!id){id=playerIds[t].size+1;playerIds[t].set(nm,id)}return `${t===0?'away':'home'}-player-${id}`};
+  const safeName=(t:number,nm:string)=>{let id=playerIds[t].get(nm);if(!id){id=playerIds[t].size+1;playerIds[t].set(nm,id)}const key=`${t===0?'away':'home'}-player-${id}`;realName.set(key,nm);return key};
   const playerId=(t:number,nm:string)=>Number(safeName(t,nm).split('-').at(-1));
   const capture=(r:Saved191Row)=>{
     for(let t=0;t<2;t++){
       const posStart=t===0?58:77, handStart=t===0?96:116, team=lineupByTeam[t];
       for(let i=0;i<9;i++){
         const player=value(r,posStart+i*2); const sourceName=value(r,posStart+i*2+1);if(!sourceName)continue;const nm=safeName(t,sourceName);
-        const prior=team.get(nm);team.set(nm,{no:prior?.no??playerId(t,nm),pos:positions[player] ?? (Number(player)||prior?.pos||10),bat:hand(value(r,handStart+i*2))??prior?.bat??null,throw:prior?.throw??null,slot:i+1});currentSlots[t].set(i+1,nm);
+        const prior=team.get(nm);// 最初に入った枠（先発の打順）は後から上書きしない
+        team.set(nm,{no:prior?.no??playerId(t,nm),pos:prior?.pos??(positions[player] ?? (Number(player)||10)),bat:prior?.bat??hand(value(r,handStart+i*2)),throw:prior?.throw??null,slot:prior?.slot??i+1});currentSlots[t].set(i+1,nm);
       }
-      const sourcePitcher=value(r,t===0?76:95);if(sourcePitcher){const pn=safeName(t,sourcePitcher);const prior=team.get(pn);team.set(pn,{no:prior?.no??playerId(t,sourcePitcher),pos:1,bat:null,throw:hand(value(r,t===0?114:134))??prior?.throw??null,slot:10});currentSlots[t].set(10,pn)}
+      const sourcePitcher=value(r,t===0?76:95);if(sourcePitcher){const pn=safeName(t,sourcePitcher);// 大谷ルールで打者と同じ選手でも、投手の枠は別に持つ（背番号は同じ）
+        const key=pn+'#P',asBatter=team.get(pn),prior=team.get(key);if(!prior)team.set(key,{no:asBatter?.no??playerId(t,sourcePitcher),pos:1,bat:null,throw:hand(value(r,t===0?114:134)),slot:10});currentSlots[t].set(10,key)}
     }
   };
   capture(first);
@@ -43,13 +47,22 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
     const rawResult=value(r,46);if(rawResult&&rawResult!=='0')p.res={label:rawResult,kind:resultKind[rawResult]??'io'};
     if(value(r,47)==='WP'||value(r,47)==='PB')p.flags.push(value(r,47));
     p.pickoff_throw_to=number(r,53) || ({一塁牽制:1,二塁牽制:2,三塁牽制:3}[value(r,53)]??0);
-    p.skip=value(r,45)==='0'&&!!rawResult;
+    p.skip=value(r,45)==='0'&&!!rawResult&&rawResult!=='0';
     const to:Record<string,number>={継続:0,残留:0,二進:2,三進:3,本進:4};
-    for(let base=1;base<=3;base++) {const status=value(r,36+base);if(!status||status==='0')continue;const dest=to[status];p.ra[base]=status.includes('死')||status==='封殺'?{out:true}:dest?{to:dest}:{back:true};}
+    for(let base=1;base<=3;base++) {const status=value(r,36+base);if(!status||status==='0')continue;const dest=to[status];// 「継続」はふつうの状態なので何も入れない。「残留」は打球のときに手で止めた印。アウトは旧Excelの言葉を残す
+      // 継続＝その場に留まる（自動で進めない）、残留＝打球で手で止めた
+      if(status==='継続'){p.ra[base]={back:true,hold:false} as any;continue}if(status==='残留'){p.ra[base]={back:true,hold:true} as any;continue}p.ra[base]=status.includes('死')||status==='封殺'?{out:true,outLabel:status} as any:dest?{to:dest}:{back:true};}
     const bst=value(r,40);if(bst==='アウト'||bst==='出塁'||bst==='二進'||bst==='三進'||bst==='本進')p.ra[0]=bst==='アウト'?{out:true}:{to:bst==='出塁'?1:bst==='二進'?2:bst==='三進'?3:4};
-    const type=value(r,41);if(type==='牽制'&&!p.pickoff_throw_to)p.pickoff_throw_to=number(r,53);
-    if(value(r,31)&&value(r,31)!=='0')p.plan.primary=value(r,31);
+    const type=value(r,41);if(type==='牽制'&&!p.pickoff_throw_to)p.pickoff_throw_to=({一塁牽制:1,二塁牽制:2,三塁牽制:3} as Record<string,number>)[value(r,53)]??1;
     if(value(r,30)&&value(r,30)!=='0')p.plan.code=value(r,30);
+    if(value(r,31)&&value(r,31)!=='0')p.plan.primary=value(r,31);
+    if(value(r,32)&&value(r,32)!=='0')(p as any).planResult=value(r,32);
+    {const t=value(r,1).match(/(\d{1,2}:\d{2}:\d{2})/);if(t)p.time=t[1].padStart(8,'0');const d=value(r,1).match(/^\d{4}-\d{2}-\d{2}/);if(d)(p as any).date=d[0];}
+    if(value(r,41)==='交代')(p as any).rowType='交代';
+    if(value(r,190)==='クイック')p.flags.push('クイック');
+    if(value(r,55)&&value(r,55)!=='0')(p as any).errorLabel=value(r,55);
+    if(value(r,49)&&!['0','ゴロ','フライ','ライナー'].includes(value(r,49)))(p as any).featureLabel=value(r,49);
+    if(value(r,54)&&value(r,54)!=='0')(p as any).pickoffDetail=value(r,54);
     for(let t=0;t<2;t++){
       const start=t===0?58:77,handStart=t===0?96:116;
       for(let slot=1;slot<=9;slot++){
@@ -59,11 +72,11 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
         else if(before&&pos!==lineupByTeam[t].get(before)?.pos)p.subs.push({t:t as 0|1,slot:slot-1,no:null,pos});
       }
       const sourceAfter=value(r,t===0?76:95),before=currentSlots[t].get(10)??'';
-      if(sourceAfter&&before){const after=safeName(t,sourceAfter);if(after!==before){const entry=lineupByTeam[t].get(after);p.subs.push({t:t as 0|1,slot:'P',no:entry?.no??playerId(t,sourceAfter),throws:hand(value(r,t===0?114:134))??undefined,pos:1});}}
+      if(sourceAfter&&before){const after=safeName(t,sourceAfter)+'#P';if(after!==before){const entry=lineupByTeam[t].get(after)??lineupByTeam[t].get(after.slice(0,-2));p.subs.push({t:t as 0|1,slot:'P',no:entry?.no??playerId(t,sourceAfter),throws:hand(value(r,t===0?114:134))??undefined,pos:1});}}
     }
     capture(r);
     return {seq:number(r,10)||index+1,page:convertSavedPageCoordinates({...p,coords_version:'legacy-excel-v1'})};
   });
-  const lineups=lineupByTeam.flatMap((m,t)=>[...m].map(([name,p])=>({team_id:t===0?'away':'home',slot:p.slot,position_id:p.pos,uniform_no:p.no,batting_hand:p.bat,throwing_hand:p.throw,player_snapshot:{id:name,name,uniform_no:p.no}})));
+  const lineups=lineupByTeam.flatMap((m,t)=>[...m].map(([name,p])=>({team_id:t===0?'away':'home',slot:p.slot,position_id:p.pos,uniform_no:p.no,batting_hand:p.bat,throwing_hand:p.throw,player_snapshot:{id:name.replace(/#P$/,''),name:opts.keepNames?realName.get(name.replace(/#P$/,''))??name:name.replace(/#P$/,''),uniform_no:p.no}})));
   return {game,lineups,plays,masters:{ballTypes:[...new Set(data.map(r=>value(r,45)).filter(x=>x&&x!=='0'))].map(name=>({name,old_excel_label:name}))}};
 }
