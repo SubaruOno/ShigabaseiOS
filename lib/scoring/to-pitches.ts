@@ -1,4 +1,4 @@
-import { applyPage, stateAt, teamSetupsFromLineup, type Page } from "./engine";
+import { applyPage, initState, stateAt, teamSetupsFromLineup, type Page } from "./engine";
 
 type LocalPlay = { seq: number; page: Page };
 type LineupRow = { team_id: string; slot: number; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; player_snapshot?: { name?: string; bat_hand?: string; throw_hand?: string; uniform_no?: string | number; show_index?: number } };
@@ -9,20 +9,25 @@ const num = (value: unknown): number | null => { const n = Number(value); return
 const positionName: Record<number, string> = { 1:"投手",2:"捕手",3:"一塁手",4:"二塁手",5:"三塁手",6:"遊撃手",7:"左翼手",8:"中堅手",9:"右翼手",10:"DH" };
 const hand = (value?: string | null) => value === "L" ? "左" : value === "S" ? "両" : "右";
 
-function resultWords(page: Page) {
+function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
   const kind = page.res?.kind;
-  if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? page.res?.label ?? null;
-  if (kind === "S") return page.res?.label === "空振" ? "空振り" : "見逃し";
-  if (kind === "B") return "ボール";
+  if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? "凡打死";
+  if (kind === "S") return page.res?.label === "空振" ? before.s >= 2 ? "空振り三振" : "空振り" : before.s >= 2 ? "見逃し三振" : "見逃し";
+  if (kind === "B") return before.b >= 3 ? "四球" : "ボール";
   if (kind === "IBB") return "敬遠";
   if (kind === "hbp") return "死球";
-  if (kind === "out") return page.feature === 2 ? "凡打飛" : page.feature === 3 ? "凡打直" : "凡打ゴロ";
-  if (kind === "fc") return "野選";
-  if (kind === "sf") return "犠牲フライ";
+  if (kind === "out") return page.res?.label === "邪飛" ? "ファールフライ" : "凡打死";
+  if (kind === "fc") return "野手選択";
+  if (kind === "sf") return "犠飛";
   if (kind === "sac") return "犠打";
-  if (kind === "e") return "失策出塁";
-  return page.res?.label ?? null;
+  if (kind === "e") return page.res?.label === "振り逃げ" ? "振り逃げ" : "エラー";
+  if (kind === "FO") return page.res?.label === "ファウル" || page.res?.label === "ファール" ? "ファール" : page.res?.label === "邪飛" ? "ファールフライ" : page.res?.label === "見送" ? "見逃し" : page.res?.label === "空振" ? "空振り" : page.res?.label === "ボール" ? "ボール" : null;
+  if (kind === "io") return page.res?.label === "失策出塁" ? "エラー" : page.res?.label === "凡打" ? "凡打死" : page.res?.label === "見送" ? "見逃し三振" : page.res?.label === "空振" ? "空振り三振" : null;
+  if (kind === "BK") return "ボーク";
+  return null;
 }
+
+const hitTypeName: Record<number, string> = { 1: "ゴロ", 2: "フライ", 3: "ライナー" };
 
 function paState(page: Page, before: ReturnType<typeof stateAt>, after: ReturnType<typeof stateAt>) {
   if (page.skip) return page.ra[0]?.out || page.ra[0]?.to ? "打席完了" : "打席継続";
@@ -39,7 +44,8 @@ export function toAnalysisPitches(input: {
   planNames?: Record<string, string>; resultNames?: Record<string, string>; substitutions?: Array<Record<string, unknown>>;
   positionNames?: Record<string, string>;
 }): AnalysisPitch[] {
-  const { plays, lineup, teamIds, teamNames } = input;
+  const { lineup, teamIds, teamNames } = input;
+  const plays = input.plays.filter(({ page }) => !!page.res || !!page.pickoff_throw_to || (page.skip && !!(page.ra[0]?.out || page.ra[0]?.to)));
   const setups = teamSetupsFromLineup(lineup as any, teamIds, teamNames);
   const nameFor = (team: number, no: number | null) => {
     if (no == null) return null;
@@ -60,8 +66,9 @@ export function toAnalysisPitches(input: {
     const pitcherNo = before.lu[1-offense].P;
     const catcherNo = before.lu[1-offense].order.find((_, slot) => before.lu[1-offense].pos[slot] === 2) ?? null;
     const stateBases = before.bases;
-    const pos = p.feature ? input.positionNames?.[String(p.feature)] ?? positionName[p.feature] ?? null : null;
-    const result2 = p.res?.label === "失策出塁" ? "失策" : null;
+    const hitType = hitTypeName[p.feature] ?? null;
+    const hitStrength = p.rank && ["A", "B", "C"].includes(p.rank) ? p.rank : p.rank === "1" ? "A" : p.rank === "2" ? "B" : p.rank === "3" ? "C" : null;
+    const result2 = null;
     const planValues = Object.values(p.plan ?? {}).filter(Boolean).map(v => input.planNames?.[String(v)] ?? String(v));
     const runners = stateBases.map(no => nameFor(offense, no));
     return {
@@ -73,11 +80,24 @@ export function toAnalysisPitches(input: {
       balls: before.b, strikes: before.s, outs: before.outs, pa_complete: paState(p, before, after),
       pitch_count: before.pcount[pitcherNo] ?? 0, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
       course_x: p.course?.[0] ?? null, course_y: p.course?.[1] ?? null,
-      batting_result: resultWords(p), batting_result2: result2, hit_type: pos, hit_strength: p.rank,
+      batting_result: resultWords(p, before), batting_result2: result2, hit_type: hitType, hit_strength: hitStrength,
+      // The scoring UI records absolute SVG field coordinates (home plate near x=46,y=238, outward/upward); legacy imports and spray-chart rendering use these same coordinates.
       hit_x: p.batted_ball?.x ?? null, hit_y: p.batted_ball?.y ?? null,
       strategy: planValues[0] ?? null, strategy2: planValues[1] ?? null, strategy_result: null,
       error_type: p.res?.label === "失策出塁" ? "失策" : null,
       fielder: p.catch_fielder.map(x => typeof x === "number" ? input.positionNames?.[String(x)] ?? positionName[x] : input.positionNames?.[String(x.pos)] ?? positionName[x.pos]).filter(Boolean).join("、") || null,
     };
   });
+}
+
+export function scoreLine(input: { plays: LocalPlay[]; lineup: LineupRow[]; teamIds: [string,string]; teamNames: [string,string] }) {
+  const setups = teamSetupsFromLineup(input.lineup as any, input.teamIds, input.teamNames);
+  const state = initState(setups);
+  for (const { page } of input.plays) {
+    if (!page.res && !page.pickoff_throw_to && !(page.skip && !!(page.ra[0]?.out || page.ra[0]?.to))) continue;
+    applyPage(state, page);
+  }
+  const inningCount = Math.max(state.inn, state.line[0].length, state.line[1].length);
+  const fillInnings = (line: number[]) => Array.from({ length: inningCount }, (_, inning) => line[inning] ?? 0);
+  return { awayScore: state.score[0], homeScore: state.score[1], awayRunsPerInning: fillInnings(state.line[0]), homeRunsPerInning: fillInnings(state.line[1]) };
 }

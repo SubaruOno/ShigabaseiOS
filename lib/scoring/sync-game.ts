@@ -1,7 +1,7 @@
 import { isUuid, playMutationId } from "./local-store";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
-import { toAnalysisPitches } from "@/lib/scoring/to-pitches";
+import { scoreLine, toAnalysisPitches } from "@/lib/scoring/to-pitches";
 
 type Lineup = { team_id: string; slot: number; roster_player_id: string; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; ohtani_rule?: boolean; player_snapshot?: Record<string, any> };
 
@@ -84,7 +84,8 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
     const {data: legacy} = await supabase.from("games").select("id").eq("date", game.game_date).eq("season",game.season).eq("kind",game.kind).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).maybeSingle();
     analysisGameId = legacy?.id;
   }
-  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${game.game_time}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: game.score_away ?? null, home_score: game.score_home ?? null, scorekeeper: game.umpire ?? null };
+  const lineScore = scoreLine({ plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames: [awayName,homeName] });
+  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${game.game_time}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
   const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
