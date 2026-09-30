@@ -13,7 +13,7 @@ export type Page = {
 };
 export type TeamSetup = { name: string; order: number[]; pos: number[]; bats: Hand[]; P: number; throws: Hand };
 export type GameState = {
-  inn: number; half: 0 | 1; score: [number, number]; hits: [number, number]; line: [number[], number[]];
+  inn: number; half: 0 | 1; score: [number, number]; hits: [number, number]; bb: [number, number]; err: [number, number]; line: [number[], number[]];
   outs: number; b: number; s: number; bases: (number | null)[]; bi: [number, number];
   pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; subHalf: [number[], number[]]; lu: TeamSetup[];
 };
@@ -24,7 +24,7 @@ export const DEFAULT_TEAMS: TeamSetup[] = [
 ];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 export function initState(teams: TeamSetup[] = DEFAULT_TEAMS): GameState {
-  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, subHalf: [[], []], lu: clone(teams) };
+  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], bb: [0, 0], err: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, subHalf: [[], []], lu: clone(teams) };
 }
 export const batterOf = (st: GameState): number => st.lu[st.half].order[st.bi[st.half]];
 export const pitcherOf = (st: GameState): number => st.lu[1 - st.half].P;
@@ -68,6 +68,8 @@ export function applyPage(st: GameState, p: Page) {
   applyPre(st, p); const team = st.half, batter = batterOf(st), pitcher = pitcherOf(st), mv = moves(st, p);
   // A played inning has a zero on the linescore even before its first run.
   st.line[team][st.inn - 1] ??= 0;
+  // 失策は守っている側に数える（捕球順に「6E」のように付いた数）
+  st.err[1 - team] += (p.catch_fielder || []).filter(c => typeof c === 'object' && c && (c as any).err).length;
   const moveRunners = () => { let runs = 0; const next: (number | null)[] = [null, null, null];
     for (let i = 3; i >= 1; i--) { const id = st.bases[i - 1]; if (id == null) continue; const a = mv[i]; if (!a || (!a.out && !a.to)) { next[i - 1] = id; continue; } if (a.out) { st.outs++; continue; } if ((a.to || 0) >= 4) { if (!a.homeOut) runs++; else st.outs++; } else if (a.to) next[a.to - 1] = id; }
     const b = mv[0]; if (b?.out) st.outs++; else if (b?.to) { if (b.to >= 4) { if (!b.homeOut) runs++; else st.outs++; } else next[b.to - 1] = batter; }
@@ -79,7 +81,7 @@ export function applyPage(st: GameState, p: Page) {
   if (k !== 'BK' && k !== 'IBB') st.pcount[pitcher] = (st.pcount[pitcher] || 0) + 1;
   if (k === 'S') st.s = Math.min(st.s + 1, 3); else if (k === 'B') st.b = Math.min(st.b + 1, 4); else if (k === 'FO' && st.s < 2) st.s++;
   const batterMove = mv[0], ended = batterMove && (batterMove.out || batterMove.to); moveRunners();
-  if (ended) { let text = p.res.label; if (k === 'S') text = p.res.label === '空振' ? '空三振' : '見三振'; else if (k === 'B') text = '四球'; else if (k === 'IBB') text = '敬遠'; else if (k === 'hbp') text = '死球'; else if (k === 'fc') text = '野選'; else if (k === 'io') text = p.res.label; else if (typeof k === 'number') { st.hits[team]++; text = ['', '安', '二', '三', '本'][k]; } else if (k === 'out') text = p.feature === 2 ? '飛' : p.feature === 3 ? '直' : 'ゴ'; else if (k === 'sf') text = '犠飛'; else if (k === 'sac') text = '犠打'; else if (p.res.label === '失策出塁') text = '失'; endPA(st, text); }
+  if (ended) { let text = p.res.label; if (k === 'S') text = p.res.label === '空振' ? '空三振' : '見三振'; else if (k === 'B') { text = '四球'; st.bb[team]++; } else if (k === 'IBB') { text = '敬遠'; st.bb[team]++; } else if (k === 'hbp') text = '死球'; else if (k === 'fc') text = '野選'; else if (k === 'io') text = p.res.label; else if (typeof k === 'number') { st.hits[team]++; text = ['', '安', '二', '三', '本'][k]; } else if (k === 'out') text = p.feature === 2 ? '飛' : p.feature === 3 ? '直' : 'ゴ'; else if (k === 'sf') text = '犠飛'; else if (k === 'sac') text = '犠打'; else if (p.res.label === '失策出塁') text = '失'; endPA(st, text); }
   three(st);
 }
 export function checkCommit(st: GameState, p: Page): string | null {
