@@ -54,6 +54,9 @@ export const localStore = {
     }
   },
   savePlays: (gameId: string, plays: LocalPlay[]) => write(`plays:${gameId}`, plays),
+  // 確定前のページ（入力途中の1球）。アプリが落ちても続きから入れられるよう別に持つ
+  draft: (gameId: string) => read<Page | null>(`draft:${gameId}`, null),
+  saveDraft: (gameId: string, page: Page | null) => write(`draft:${gameId}`, page),
   savePlay: async (gameId: string, page: Page) => { const plays=await read<LocalPlay[]>(`plays:${gameId}`,[]); plays.push({seq:plays.length+1,page,client_mutation_id:uuid(),created_at:new Date().toISOString()}); await write(`plays:${gameId}`,plays); return plays; },
   deviceId: async () => { let id = await read<string | null>("device", null); if (!id) { id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`; await write("device", id); } return id; },
 };
