@@ -1,4 +1,4 @@
-import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf } from './engine';
+import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf, moves } from './engine';
 import { convertSavedPageCoordinates } from './coords';
 
 // Saved-file order from the 191-column values survey, not the input template order.
@@ -79,7 +79,9 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     const planNames=Object.values(p.plan??{}).filter(Boolean).map(v=>masters.plans?.find(x=>x.id===String(v)||x.name===String(v))?.old_excel_label??String(v));
     const defender=before.lu[1-before.half];
     const fielder=(f: number|{pos:number;err?:string})=>typeof f==='number'? defender.order[defender.pos.indexOf(f)] : defender.order[defender.pos.indexOf(f.pos)];
-    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,ballRank:p.rank??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':p.subs.length&&!p.res?'交代':'投球',catchFielder:p.catch_fielder.map(f=>String(fielder(f)??'')).filter(Boolean).join('、'),operation:planNames[0],operationDetail:planNames[1],handB:p.handB??undefined,skipPa:p.skip,runnerStatus:[1,2,3].map(base=>p.ra[base]?.out?'アウト':p.ra[base]?.to===1?'一進':p.ra[base]?.to===2?'二進':p.ra[base]?.to===3?'三進':p.ra[base]?.to===4?'本進':p.ra[base]?.back?'残留':undefined) as [string,string,string],batterStatus:p.ra[0]?.out?'アウト':p.ra[0]?.to===1?'出塁':p.ra[0]?.to===2?'二進':p.ra[0]?.to===3?'三進':p.ra[0]?.to===4?'本進':undefined,quick:undefined};
+    // 走者の動きは、結果から自動で決まる分も含めて書く（旧マクロは「本進」の数を打点として数える）
+    const mv=moves(before,p) as Record<number,{to?:number;out?:boolean}>;
+    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,ballRank:p.rank??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':p.subs.length&&!p.res?'交代':'投球',catchFielder:p.catch_fielder.map(f=>String(fielder(f)??'')).filter(Boolean).join('、'),operation:planNames[0],operationDetail:planNames[1],handB:p.handB??undefined,skipPa:p.skip,runnerStatus:[1,2,3].map(base=>{const m=mv[base];return before.bases[base-1]==null?undefined:m?.out?'アウト':m?.to===2?'二進':m?.to===3?'三進':(m?.to??0)>=4?'本進':p.ra[base]?.back?'残留':undefined}) as [string,string,string],batterStatus:mv[0]?.out?'アウト':mv[0]?.to===1?'出塁':mv[0]?.to===2?'二進':mv[0]?.to===3?'三進':(mv[0]?.to??0)>=4?'本進':undefined,quick:undefined};
     const row=export191Row(before,p,info,item.seq,play);
     applyPage(before,p);
     return row;

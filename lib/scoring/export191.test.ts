@@ -23,6 +23,10 @@ describe('191-column export',()=>{
     expect(rows).toHaveLength(2);expect(rows[0][10]).toBe(1);expect(rows[0][11]).toBe('表');expect(rows[0][14]).toBe(0);expect(rows[1][20]).toBe(1);
     expect(rows[0][57]).toBe('1');expect(rows[0][58]).toBe('A-1');expect(rows[0].slice(174,181)).toEqual(['H-3','H-4','H-5','H-6','H-7','H-8','H-9']);
   });
+  it('writes automatic runner moves as 本進/出塁 even when nothing was moved by hand',()=>{
+    const rows=export191Game(game,rosters,[{seq:1,page:page({res:{label:'三塁打',kind:3}})},{seq:2,page:page({res:{label:'単打',kind:1}})}],{});
+    expect(rows[1][38]).toBe('本進');expect(rows[1][39]).toBe('出塁');
+  });
   it('marks pinch hitter and pinch runner from the engine substitution state',()=>{
     const rows=export191Game(game,rosters,[
       {seq:1,page:page({res:{label:'単打',kind:1},ra:{0:{to:1}}})},

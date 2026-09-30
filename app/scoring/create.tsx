@@ -7,7 +7,8 @@ import { LocalGame, localStore } from "@/lib/scoring/local-store";
 import { canStartGame, validateCreateGame } from "@/lib/scoring/create-validation";
 
 const WEATHER=["晴れ","晴れ時々くもり","晴れのちくもり","くもり","くもり時々晴れ","くもりのち晴れ","くもり時々雨","くもりのち雨","晴れ時々雨","晴れのち雨","雨時々晴れ","雨のち晴れ","雨時々くもり","雨のちくもり","雨","嵐","雪","変な天気"];
-const POS=["1","2","3","4","5","6","7","8","9","DH"];
+// 打順1〜9の初期の守備（捕手〜右翼とDH）。10行目は投手
+const POS=["2","3","4","5","6","7","8","9","DH","1"];
 const id=()=>"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==="x"?r:r&3|8).toString(16)});
 const dateTime=()=>{const d=new Date(),p=(n:number)=>String(n).padStart(2,"0");return{date:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,time:`${p(d.getHours())}:${p(d.getMinutes())}`}};
 export default function CreateScoringGame(){
@@ -20,7 +21,7 @@ export default function CreateScoringGame(){
  const teamPlayers=(teamId:string)=>players.filter(p=>p.team_id===teamId&&!p.retired);
  const lineups=v.lineups??{};
  const setLine=(teamId:string,index:number,key:string,value:string)=>setV((x:any)=>({...x,lineups:{...x.lineups,[teamId]:x.lineups[teamId].map((r:any,i:number)=>i===index?{...r,[key]:value}:r)}}));
- const teamsDraft=[{id:v.away,name:teams.find(t=>t.id===v.away)?.name,lineup:lineups[v.away]??[]},{id:v.home,name:teams.find(t=>t.id===v.home)?.name,lineup:lineups[v.home]??[]}];
+ const teamsDraft=[{id:v.away,name:teams.find(t=>t.id===v.away)?.name,lineup:lineups[v.away]??makeLineup(teamPlayers(v.away))},{id:v.home,name:teams.find(t=>t.id===v.home)?.name,lineup:lineups[v.home]??makeLineup(teamPlayers(v.home))}];
  const validation=validateCreateGame({displayNo:v.displayNo,date:v.date,time:v.time,stadium:v.stadium,weather:v.weather,method:v.method,season:v.season,kind:v.kind,week:v.week,day:v.day,gameNumber:v.gameNumber,teams:teamsDraft});
  const start=async()=>{if(!validation.valid){setError(validation.missing.join("、"));return}const all=await localStore.games();if(!canStartGame(all)){Alert.alert("試合が進行中です","先に進行中の試合を保存またはリセットしてください");return}if(all.some(g=>g.display_game_number===v.displayNo)){setError("表示用試合番号が重複しています");return}
   const lineup:any[]=[];for(const t of teamsDraft){for(let i=0;i<9;i++){const r=t.lineup[i],pl=players.find(x=>x.id===r.playerId);lineup.push({team_id:t.id,slot:i+1,roster_player_id:pl.id,position_id:r.position==="DH"?10:Number(r.position),batting_hand:pl.bat_hand,throwing_hand:pl.throw_hand,uniform_no:String(pl.show_index??i+1),player_snapshot:pl})}const pitcher=players.find((pl:any)=>pl.id===t.lineup[9]?.playerId)??teamPlayers(t.id).find((pl:any)=>pl.primary_position_id===1)??teamPlayers(t.id)[0];if(!pitcher){setError(`${t.name}の投手を選べません`);return}lineup.push({team_id:t.id,slot:10,roster_player_id:pitcher.id,position_id:1,batting_hand:pitcher.bat_hand,throwing_hand:pitcher.throw_hand,uniform_no:String(pitcher.show_index??1),player_snapshot:pitcher})}

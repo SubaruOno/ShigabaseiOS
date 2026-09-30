@@ -138,3 +138,23 @@ describe('大谷ルール', () => {
     expect(subError(st, 0, 8, st.lu[0].order[2], true)).toMatch('出場中');
   });
 });
+
+describe('延長・サヨナラ', () => {
+  const outs3 = [page('凡打', 'out'), page('凡打', 'out'), page('凡打', 'out')];
+  it('9回を同点で終えると10回表に進み、10回の得点も記録される', () => {
+    const pages: Page[] = [];
+    for (let i = 0; i < 18; i++) pages.push(...outs3);
+    pages.push(page('本塁打', 4));
+    const st = stateAt(pages.length, pages);
+    expect([st.inn, st.half]).toEqual([10, 0]);
+    expect(st.line[0][9]).toBe(1);
+    expect(st.score).toEqual([1, 0]);
+  });
+  it('サヨナラ：9回裏に勝ち越しても計算は止まらない（BASSと同じく、終わりは「入力終了」で決める）', () => {
+    const pages: Page[] = [];
+    for (let i = 0; i < 17; i++) pages.push(...outs3);
+    pages.push(page('本塁打', 4));
+    const st = stateAt(pages.length, pages);
+    expect([st.inn, st.half, st.score]).toEqual([9, 1, [0, 1]]);
+  });
+});
