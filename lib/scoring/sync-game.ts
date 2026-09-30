@@ -1,3 +1,4 @@
+import { isUuid, playMutationId } from "./local-store";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
 import { toAnalysisPitches } from "@/lib/scoring/to-pitches";
@@ -40,7 +41,7 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
     const { error } = await supabase.from("scoring_lineups").upsert(lineup.map(row => ({ game_id: game.id, ...row })), { onConflict: "game_id,team_id,slot" });
     if (error) throw new Error(`先発メンバーを同期できませんでした: ${error.message}`);
   }
-  const { error: playError } = await supabase.from("scoring_plays").upsert(plays.map(p => ({ game_id: game.id, seq: p.seq, input_event: p.page, page_state: {}, client_mutation_id: p.client_mutation_id, device_id: deviceId })), { onConflict: "game_id,client_mutation_id" });
+  const { error: playError } = await supabase.from("scoring_plays").upsert(plays.map(p => ({ game_id: game.id, seq: p.seq, input_event: p.page, page_state: {}, client_mutation_id: isUuid(p.client_mutation_id) ? p.client_mutation_id : playMutationId(game.id, p.seq), device_id: deviceId })), { onConflict: "game_id,client_mutation_id" });
   if (playError) throw new Error(`プレイを同期できませんでした: ${playError.message}`);
 
   // ローカルのページに記録された選手交代を正規化して同期する。

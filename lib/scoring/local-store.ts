@@ -58,3 +58,13 @@ export const localStore = {
   deviceId: async () => { let id = await read<string | null>("device", null); if (!id) { id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`; await write("device", id); } return id; },
 };
 function uuid(){return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==="x"?r:(r&3|8)).toString(16)})}
+
+// プレイの識別番号は、試合IDと順番から毎回同じuuidを作る（同期で二重登録しないため）
+const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isUuid(v:unknown):v is string{return typeof v==="string"&&UUID_RE.test(v)}
+export function playMutationId(gameId:string,seq:number):string{
+  const src=`${gameId}:${seq}`;let h1=0x811c9dc5,h2=0x01000193,h3=0x9e3779b9,h4=0x85ebca6b;
+  for(let i=0;i<src.length;i++){const c=src.charCodeAt(i);h1=Math.imul(h1^c,16777619);h2=Math.imul(h2^c,2246822507);h3=Math.imul(h3^c,3266489909);h4=Math.imul(h4^c,668265263)}
+  const hex=[h1,h2,h3,h4].map(h=>(h>>>0).toString(16).padStart(8,"0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-5${hex.slice(13,16)}-${(8+(parseInt(hex[16],16)&3)).toString(16)}${hex.slice(17,20)}-${hex.slice(20,32)}`;
+}
