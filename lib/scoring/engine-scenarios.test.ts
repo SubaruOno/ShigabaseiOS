@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyPage, batterOf, blank, checkCommit, initState, Page, pitcherOf, stateAt } from './engine';
+import { applyPage, batterOf, blank, checkCommit, initState, Page, pitcherOf, stateAt, subError } from './engine';
 
 // 選手交代・タイブレーク・打席スキップ・盗塁と牽制の重なり・併殺を、BASSの調査（02-bass-survey）どおりに動くか確かめる
 const page = (label: string, kind: string | number, extra: Partial<Page> = {}): Page => ({ ...blank(), res: { label, kind }, ...extra });
@@ -103,5 +103,26 @@ describe('球数', () => {
     st.half = 1; st.b = 0;
     expect(st.pcount[1001]).toBe(3);
     expect(st.pcount[1] ?? 0).toBe(0);
+  });
+});
+
+describe('交代で出せない選手', () => {
+  it('出場中の選手は代打に出せない', () => {
+    const st = initState();
+    expect(subError(st, 0, 0, st.lu[0].order[3])).toMatch('出場中');
+    expect(subError(st, 0, 0, 44)).toBeNull();
+  });
+  it('交代で退いた選手はもう出られない（打者も投手も）', () => {
+    const old = initState().lu[0].order[0];
+    const st = stateAt(1, [{ ...page('ボール', 'B'), subs: [{ t: 0, slot: 0, no: 44 }] }]);
+    expect(subError(st, 0, 0, old)).toMatch('退いた');
+    const oldP = initState().lu[1].P;
+    const st2 = stateAt(1, [{ ...page('ボール', 'B'), subs: [{ t: 1, slot: 'P', no: 30 }] }]);
+    expect(subError(st2, 1, 'P', oldP)).toMatch('退いた');
+  });
+  it('守っている野手が投手に回るのはよいが、今の投手をもう一度は選べない', () => {
+    const st = initState();
+    expect(subError(st, 1, 'P', st.lu[1].order[2])).toBeNull();
+    expect(subError(st, 1, 'P', st.lu[1].P)).toMatch('すでに投手');
   });
 });

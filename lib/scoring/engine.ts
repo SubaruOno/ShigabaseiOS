@@ -15,7 +15,7 @@ export type TeamSetup = { name: string; order: number[]; pos: number[]; bats: Ha
 export type GameState = {
   inn: number; half: 0 | 1; score: [number, number]; hits: [number, number]; bb: [number, number]; err: [number, number]; line: [number[], number[]];
   outs: number; b: number; s: number; bases: (number | null)[]; bi: [number, number];
-  pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; subHalf: [number[], number[]]; lu: TeamSetup[];
+  pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; gone: [number[], number[]]; subHalf: [number[], number[]]; lu: TeamSetup[];
 };
 export const blank = (): Page => ({ subs: [], tb: null, pitch_type: null, course: null, catcher_mitt_position: 0, ball_speed: '', res: null, flags: [], plan: {}, batted_ball: null, feature: 0, rank: null, catch_fielder: [], ra: {}, pickoff_throw_to: 0, skip: false, skipOut: null, memo: '', time: null, handP: null, handB: null });
 export const DEFAULT_TEAMS: TeamSetup[] = [
@@ -24,7 +24,7 @@ export const DEFAULT_TEAMS: TeamSetup[] = [
 ];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 export function initState(teams: TeamSetup[] = DEFAULT_TEAMS): GameState {
-  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], bb: [0, 0], err: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, subHalf: [[], []], lu: clone(teams) };
+  return { inn: 1, half: 0, score: [0, 0], hits: [0, 0], bb: [0, 0], err: [0, 0], line: [[], []], outs: 0, b: 0, s: 0, bases: [null, null, null], bi: [0, 0], pcount: {}, paLog: {}, tie: false, gone: [[], []], subHalf: [[], []], lu: clone(teams) };
 }
 export const batterOf = (st: GameState): number => st.lu[st.half].order[st.bi[st.half]];
 export const pitcherOf = (st: GameState): number => st.lu[1 - st.half].P;
@@ -60,8 +60,8 @@ export function moves(st: GameState, p: Page): Record<number, Move> {
   return m;
 }
 export function applyPre(st: GameState, p: Page) {
-  for (const c of p.subs || []) { const lineup = st.lu[c.t]; if (c.slot === 'P') { if (c.no != null) lineup.P = c.no; if (c.throws) lineup.throws = c.throws; continue; }
-    const old = lineup.order[c.slot]; if (c.no != null && c.no !== old) { lineup.order[c.slot] = c.no; if (c.bats) lineup.bats[c.slot] = c.bats; if (c.t === st.half) st.bases = st.bases.map(id => id === old ? c.no : id); st.subHalf[c.t].push(c.slot); }
+  for (const c of p.subs || []) { const lineup = st.lu[c.t]; if (c.slot === 'P') { if (c.no != null && c.no !== lineup.P) { const oldP = lineup.P; lineup.P = c.no; if (!lineup.order.includes(oldP)) st.gone[c.t].push(oldP); } if (c.throws) lineup.throws = c.throws; continue; }
+    const old = lineup.order[c.slot]; if (c.no != null && c.no !== old) { lineup.order[c.slot] = c.no; if (!lineup.order.includes(old) && lineup.P !== old) st.gone[c.t].push(old); if (c.bats) lineup.bats[c.slot] = c.bats; if (c.t === st.half) st.bases = st.bases.map(id => id === old ? c.no : id); st.subHalf[c.t].push(c.slot); }
     if (c.pos != null) lineup.pos[c.slot] = c.pos;
   }
   if (p.tb) { const lineup = st.lu[st.half]; st.tie = true; st.bi[st.half] = p.tb.bi; st.bases = p.tb.r.map(i => i == null ? null : lineup.order[i]); st.b = p.tb.b || 0; st.s = p.tb.s || 0; st.outs = p.tb.o || 0; }
@@ -116,4 +116,14 @@ export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;r
     const throws=(p?.throwing_hand??p?.player_snapshot?.throw_hand)==='L'?'左':'右' as Hand;
     return {name:teamNames[index],order,pos:positions,bats,P:Number.isFinite(pitchNo)?pitchNo:order[0],throws};
   });
+}
+
+/** 交代で出せない選手なら理由を返す（出場中・交代で退いた選手は出せない。守っている野手が投手に回るのはよい） */
+export function subError(st: GameState, t: number, slot: number | 'P', no: number): string | null {
+  const lu = st.lu[t];
+  if ((st.gone?.[t] ?? []).includes(no)) return `#${no} は交代で退いたので、もう出られません`;
+  if (slot === 'P') { if (lu.P === no) return `#${no} はすでに投手です`; return null; }
+  if (lu.order[slot] === no) return null;
+  if (lu.order.includes(no) || lu.P === no) return `#${no} は出場中なので、代打・代走には出せません`;
+  return null;
 }
