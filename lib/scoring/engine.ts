@@ -28,6 +28,9 @@ export function initState(teams: TeamSetup[] = DEFAULT_TEAMS): GameState {
 }
 export const batterOf = (st: GameState): number => st.lu[st.half].order[st.bi[st.half]];
 export const pitcherOf = (st: GameState): number => st.lu[1 - st.half].P;
+// 球数は「守っているチーム×1000＋背番号」で数える（両チームに同じ背番号の投手がいても混ざらない）
+export const pitchKey = (defTeam: number, no: number): number => defTeam * 1000 + no;
+export const pitchesOf = (st: GameState, no: number = pitcherOf(st), defTeam: number = 1 - st.half): number => st.pcount[pitchKey(defTeam, no)] ?? 0;
 function endPA(st: GameState, text: string) { const team = st.half, no = batterOf(st), key = `${team}-${no}`; (st.paLog[key] ??= []).push(text); st.bi[team] = (st.bi[team] + 1) % 9; st.b = 0; st.s = 0; }
 function addRun(st: GameState, n: number) { if (!n) return; st.score[st.half] += n; const line = st.line[st.half]; line[st.inn - 1] = (line[st.inn - 1] || 0) + n; }
 export function autoMoves(st: GameState, p: Page): Record<number, Move> {
@@ -81,7 +84,7 @@ export function applyPage(st: GameState, p: Page) {
   if (p.pickoff_throw_to) { moveRunners(); three(st); return; }
   if (p.skip) { if (!mv[0] || (!mv[0].out && !mv[0].to)) return; const out = !!mv[0].out; moveRunners(); endPA(st, out ? '凡退' : '出塁'); three(st); return; }
   if (!p.res) return; const k = p.res.kind;
-  if (k !== 'BK' && k !== 'IBB') st.pcount[pitcher] = (st.pcount[pitcher] || 0) + 1;
+  if (k !== 'BK' && k !== 'IBB') st.pcount[pitchKey(1 - team, pitcher)] = (st.pcount[pitchKey(1 - team, pitcher)] || 0) + 1;
   if (k === 'S') st.s = Math.min(st.s + 1, 3); else if (k === 'B') st.b = Math.min(st.b + 1, 4); else if (k === 'FO' && st.s < 2) st.s++;
   const batterMove = mv[0], ended = batterMove && (batterMove.out || batterMove.to); moveRunners();
   if (ended) { let text = p.res.label; if (k === 'S') text = p.res.label === '空振' ? '空三振' : '見三振'; else if (k === 'B') { text = '四球'; st.bb[team]++; } else if (k === 'IBB') { text = '敬遠'; st.bb[team]++; } else if (k === 'hbp') text = '死球'; else if (k === 'fc') text = '野選'; else if (k === 'io') text = p.res.label; else if (typeof k === 'number') { st.hits[team]++; text = ['', '安', '二', '三', '本'][k]; } else if (k === 'out') text = p.feature === 2 ? '飛' : p.feature === 3 ? '直' : 'ゴ'; else if (k === 'sf') text = '犠飛'; else if (k === 'sac') text = '犠打'; else if (p.res.label === '失策出塁') text = '失'; endPA(st, text); }

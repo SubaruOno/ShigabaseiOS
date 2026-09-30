@@ -29,7 +29,7 @@ describe('scoring engine mirrors prototype state transitions', () => {
     const walk = page('ボール', 'B');
     const st = run(sub, walk, walk, walk, walk);
     expect(st.lu[0].order[0]).toBe(44); expect(st.bi[0]).toBe(1); expect(st.bases[0]).toBe(44);
-    expect(st.pcount[1]).toBe(4); expect(st.b).toBe(0); expect(checkCommit(stateAt(3, [sub, walk, walk, blank()], DEFAULT_TEAMS, true), walk)).toBeNull();
+    expect(st.pcount[1001]).toBe(4); expect(st.b).toBe(0); expect(checkCommit(stateAt(3, [sub, walk, walk, blank()], DEFAULT_TEAMS, true), walk)).toBeNull();
   });
   it('applies a pinch hitter in the batting order slot selected from the batter dialog', () => {
     const p = { ...blank(), subs: [{ t: 0 as const, slot: 0, no: 44, bats: '左' as const, pos: 8 }] };
@@ -52,22 +52,22 @@ describe('scoring engine mirrors prototype state transitions', () => {
     const st = initState(); setRunner(st, 0, 77);
     applyPage(st, { ...blank(), pickoff_throw_to: 1, ra: { 1: { to: 2 } } });
     applyPage(st, { ...blank(), pickoff_throw_to: 2, ra: { 2: { out: true } } });
-    expect(st.bases).toEqual([null, null, null]); expect(st.outs).toBe(1); expect(st.pcount[1] || 0).toBe(0);
+    expect(st.bases).toEqual([null, null, null]); expect(st.outs).toBe(1); expect(st.pcount[1001] || 0).toBe(0);
   });
   it('pickoff records no pitch and applies the manual runner out', () => {
     const st = initState(); setRunner(st, 0, 77);
     applyPage(st, { ...blank(), pickoff_throw_to: 1, ra: { 1: { out: true } } });
-    expect(st.outs).toBe(1); expect(st.bases[0]).toBeNull(); expect(st.pcount[1]).toBeUndefined();
+    expect(st.outs).toBe(1); expect(st.bases[0]).toBeNull(); expect(st.pcount[1001]).toBeUndefined();
   });
   it('intentional walk does not count a pitch or ask batter hand', () => {
     const st = initState(); st.lu[0].bats[0] = '両';
     const p = page('申告敬遠', 'IBB'); expect(checkCommit(st, p)).toBeNull(); applyPage(st, p);
-    expect(st.pcount[1]).toBeUndefined(); expect(st.bases[0]).toBe(DEFAULT_TEAMS[0].order[0]);
+    expect(st.pcount[1001]).toBeUndefined(); expect(st.bases[0]).toBe(DEFAULT_TEAMS[0].order[0]);
   });
   it('balk advances runners and does not count a pitch', () => {
     const st = initState(); setRunner(st, 0, 77);
     applyPage(st, page('ボーク', 'BK'));
-    expect(st.bases[1]).toBe(77); expect(st.pcount[1]).toBeUndefined();
+    expect(st.bases[1]).toBe(77); expect(st.pcount[1001]).toBeUndefined();
   });
   it('third strike requires a manual batter out or advance before commit', () => {
     const st = initState(); st.s = 2;
@@ -82,11 +82,11 @@ describe('scoring engine mirrors prototype state transitions', () => {
   });
   it('fielder choice advances runners and places batter at first', () => {
     const st = initState(); setRunner(st, 0, 77); applyPage(st, page('野選', 'fc'));
-    expect(st.bases[0]).toBe(DEFAULT_TEAMS[0].order[0]); expect(st.bases[1]).toBe(77); expect(st.pcount[1]).toBe(1);
+    expect(st.bases[0]).toBe(DEFAULT_TEAMS[0].order[0]); expect(st.bases[1]).toBe(77); expect(st.pcount[1001]).toBe(1);
   });
   it('single advances a runner one base and puts batter on first', () => {
     const st = initState(); setRunner(st, 0, 77); applyPage(st, page('単打', 1));
-    expect(st.bases.slice(0, 2)).toEqual([DEFAULT_TEAMS[0].order[0], 77]); expect(st.pcount[1]).toBe(1);
+    expect(st.bases.slice(0, 2)).toEqual([DEFAULT_TEAMS[0].order[0], 77]); expect(st.pcount[1001]).toBe(1);
   });
   it('home run scores batter and all runners', () => {
     const st = initState(); st.bases = [10, 11, 12]; applyPage(st, page('本塁打', 4));

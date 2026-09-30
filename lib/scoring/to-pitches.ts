@@ -82,7 +82,7 @@ export function toAnalysisPitches(input: {
       pitcher_name: nameFor(1-offense, pitcherNo), pitcher_hand: before.lu[1-offense].throws,
       catcher_name: nameFor(1-offense, catcherNo), runner_1st: runners[0], runner_2nd: runners[1], runner_3rd: runners[2],
       balls: before.b, strikes: before.s, outs: before.outs, pa_complete: paState(p, before, after),
-      pitch_count: before.pcount[pitcherNo] ?? 0, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
+      pitch_count: before.pcount[(1 - before.half) * 1000 + pitcherNo] ?? 0, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
       course_x: p.course?.[0] ?? null, course_y: p.course?.[1] ?? null,
       batting_result: resultWords(p, before), batting_result2: result2, hit_type: hitType, hit_strength: hitStrength,
       // The scoring UI records absolute SVG field coordinates (home plate near x=46,y=238, outward/upward); legacy imports and spray-chart rendering use these same coordinates.
