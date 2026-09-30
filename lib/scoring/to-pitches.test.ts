@@ -36,3 +36,13 @@ describe("scoring pages to analysis pitch rows",()=>{
     expect(line).toEqual({awayScore:1,homeScore:0,awayRunsPerInning:[1],homeRunsPerInning:[0]});
   });
 });
+
+describe('妨害は旧Excelと同じ語で書く', () => {
+  it('守備妨害は凡打死にしない', async () => {
+    const mod: any = await import('./to-pitches');
+    const fn = mod.resultWords;
+    const { blank, stateAt } = await import('./engine');
+    const p = blank(); p.res = { label: '守備妨害', kind: 'out' };
+    expect(fn(p, stateAt(0, []))).toBe('守備妨害');
+  });
+});

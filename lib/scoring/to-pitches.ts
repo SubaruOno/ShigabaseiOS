@@ -9,8 +9,11 @@ const num = (value: unknown): number | null => { const n = Number(value); return
 const positionName: Record<number, string> = { 1:"投手",2:"捕手",3:"一塁手",4:"二塁手",5:"三塁手",6:"遊撃手",7:"左翼手",8:"中堅手",9:"右翼手",10:"DH" };
 const hand = (value?: string | null) => value === "L" ? "左" : value === "S" ? "両" : "右";
 
-function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
+export function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
   const kind = page.res?.kind;
+  // 旧Excelで専用の語がある結果は、種類より先に名前で決める
+  const label = page.res?.label;
+  if (label === "守備妨害" || label === "打撃妨害" || label === "走塁妨害") return label;
   if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? "凡打死";
   if (kind === "S") return page.res?.label === "空振" ? before.s >= 2 ? "空振り三振" : "空振り" : before.s >= 2 ? "見逃し三振" : "見逃し";
   if (kind === "B") return before.b >= 3 ? "四球" : "ボール";
