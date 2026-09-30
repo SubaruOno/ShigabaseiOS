@@ -5,7 +5,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
 import { supabase } from "@/lib/supabase";
 export default function ScoringHome(){const {user,isLoading,hasRole}=useAuth();const [games,setGames]=useState<LocalGame[]>([]),[teams,setTeams]=useState<any[]>([]),[players,setPlayers]=useState<any[]>([]);const [loading,setLoading]=useState(true);
- const refresh=async()=>{const local=await localStore.games();setGames(local);const [{data:t},{data:p}]=await Promise.all([supabase.from("opponent_teams").select("id,name,is_own_team"),supabase.from("scoring_roster_players").select("id,team_id,retired")]);if(t?.length){setTeams(t);await localStore.saveMasters("teams",t)}else setTeams(await localStore.masters("teams"));if(p?.length){setPlayers(p);await localStore.saveMasters("players",p)}else setPlayers(await localStore.masters("players"));setLoading(false)};
+ const refresh=async()=>{try{const local=await localStore.games();setGames(local);setLoading(false);
+// 通信が切れていても画面を止めない。5秒で諦めて端末の控えを使う
+const net=<T,>(q:PromiseLike<T>)=>Promise.race([Promise.resolve(q),new Promise<T>(r=>setTimeout(()=>r({data:null} as any),5000))]).catch(()=>({data:null}) as any);
+const [{data:t},{data:p}]=await Promise.all([net(supabase.from("opponent_teams").select("id,name,is_own_team")),net(supabase.from("scoring_roster_players").select("id,team_id,retired"))]) as any[];if(t?.length){setTeams(t);await localStore.saveMasters("teams",t)}else setTeams(await localStore.masters("teams"));if(p?.length){setPlayers(p);await localStore.saveMasters("players",p)}else setPlayers(await localStore.masters("players"))}catch(e){console.warn("scoring refresh",e)}finally{setLoading(false)}};
  useFocusEffect(useCallback(()=>{refresh();return()=>{}},[]));
  useEffect(()=>{if(typeof window!=="undefined"&&typeof (window as any).addEventListener==="function"){const fn=()=>{refresh()};window.addEventListener("scoring-state-changed",fn);return()=>window.removeEventListener("scoring-state-changed",fn)}},[]);
  if(isLoading||loading)return <View style={s.center}><Text>読み込み中…</Text></View>;if(!user)return <Redirect href="/login"/>;if(!hasRole("analyst")&&!hasRole("admin"))return <Redirect href="/(tabs)"/>;
