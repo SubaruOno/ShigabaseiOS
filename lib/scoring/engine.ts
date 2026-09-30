@@ -2,6 +2,8 @@ export type Hand = '左' | '右' | '両';
 export type Move = { to?: number; out?: boolean; back?: boolean; homeOut?: boolean };
 export type Substitution = { t: 0 | 1; slot: number | 'P'; no: number | null; bats?: Hand; pos?: number; throws?: Hand };
 export type Page = {
+  /** One-time marker for legacy coordinate conversion; never reconvert marked pages. */
+  coords_version?: 'legacy-excel-v1';
   subs: Substitution[]; tb: { bi: number; r: (number | null)[]; b?: number; s?: number; o?: number } | null;
   pitch_type: string | null; course: [number, number] | null; catcher_mitt_position: number;
   ball_speed: string; res: { label: string; kind: string | number } | null; flags: string[];

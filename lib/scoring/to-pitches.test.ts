@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blank, type Page } from "./engine";
 import { scoreLine, toAnalysisPitches } from "./to-pitches";
+import { oldFieldPointFromBASS, LEGACY_FIELD } from "./coords";
 
 const lineup = [0,1].flatMap(side => Array.from({length:10},(_,slot)=>({team_id:side?"home":"away",slot:slot+1,roster_player_id:`${side}-${slot}`,position_id:slot===9?1:slot+1,uniform_no:String(slot+1),batting_hand:"R",throwing_hand:"R",player_snapshot:{name:`${side}-${slot+1}`}})));
 const page = (kind?: string|number, label="", extra:Partial<Page>={}):Page=>({...blank(),res:kind==null?null:{kind,label},...extra});
@@ -23,9 +24,10 @@ describe("scoring pages to analysis pitch rows",()=>{
   });
   it("maps batted-ball feature and strength and preserves field coordinates",()=>{
     const result=rows([page("out","凡打",{feature:3,rank:"A",batted_ball:{x:109,y:72}})])[0];
-    expect([result.hit_type,result.hit_strength,result.hit_x,result.hit_y]).toEqual(["ライナー","A",109,72]);
+    expect([result.hit_type,result.hit_strength,result.hit_x,result.hit_y]).toEqual(["ライナー","A",oldFieldPointFromBASS({x:109,y:72}).x,oldFieldPointFromBASS({x:109,y:72}).y]);
     expect(rows([page("out","凡打",{feature:1,rank:"2"})])[0].hit_strength).toBe("B");
   });
+  it("preserves explicitly legacy coordinates without a second conversion",()=>{const point={x:109,y:72};const p=page("out","凡打",{coords_version:"legacy-excel-v1",batted_ball:point});const result=rows([p])[0];expect([result.hit_x,result.hit_y]).toEqual([point.x,point.y]);});
   it("omits blank pages and retains committed result, pickoff, and skip pages",()=>{
     const blankPage=page();const result=rows([blankPage,page("B","ボール"),page(undefined,"",{pickoff_throw_to:1}),page(undefined,"",{skip:true,ra:{0:{out:true}}}),page()]);
     expect(result).toHaveLength(3);expect(result.map(x=>x.batting_result)).toEqual(["ボール",null,null]);

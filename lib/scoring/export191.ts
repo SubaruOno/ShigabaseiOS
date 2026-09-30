@@ -1,4 +1,5 @@
 import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf } from './engine';
+import { convertSavedPageCoordinates } from './coords';
 
 // Saved-file order from the 191-column values survey, not the input template order.
 export const COLUMN191_HEADERS = [
@@ -72,7 +73,7 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
   const clean = plays;
   return clean.map((item,index)=>{
     const before=stateAt(index,clean.map(x=>x.page),setup,true);
-    const p=item.page;
+    const p=convertSavedPageCoordinates(item.page);
     const result = p.res ? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
     const pitchType = p.pitch_type ? masters.ballTypes?.find(x=>x.name===p.pitch_type)?.old_excel_label ?? p.pitch_type : undefined;
     const planNames=Object.values(p.plan??{}).filter(Boolean).map(v=>masters.plans?.find(x=>x.id===String(v)||x.name===String(v))?.old_excel_label??String(v));

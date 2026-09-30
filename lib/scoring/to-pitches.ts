@@ -1,4 +1,5 @@
 import { applyPage, initState, stateAt, teamSetupsFromLineup, type Page } from "./engine";
+import { convertSavedPageCoordinates } from "./coords";
 
 type LocalPlay = { seq: number; page: Page };
 type LineupRow = { team_id: string; slot: number; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; player_snapshot?: { name?: string; bat_hand?: string; throw_hand?: string; uniform_no?: string | number; show_index?: number } };
@@ -63,7 +64,7 @@ export function toAnalysisPitches(input: {
   return plays.map((play, index) => {
     const before = stateAt(index, plays.map(p => p.page), setups, true);
     const after = stateAt(index + 1, plays.map(p => p.page), setups);
-    const p = play.page;
+    const p = convertSavedPageCoordinates(play.page);
     const offense = before.half;
     const batterNo = before.lu[offense].order[before.bi[offense]];
     const pitcherNo = before.lu[1-offense].P;

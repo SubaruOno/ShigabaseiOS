@@ -1,5 +1,6 @@
 import type { Page, Hand, Substitution } from './engine';
 import { COLUMN191_HEADERS } from './export191';
+import { convertSavedPageCoordinates } from './coords';
 
 export type Saved191Row = Array<string | number | null | undefined>;
 export type Imported191Game = {
@@ -61,7 +62,7 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
       if(sourceAfter&&before){const after=safeName(t,sourceAfter);if(after!==before){const entry=lineupByTeam[t].get(after);p.subs.push({t:t as 0|1,slot:'P',no:entry?.no??playerId(t,sourceAfter),throws:hand(value(r,t===0?114:134))??undefined,pos:1});}}
     }
     capture(r);
-    return {seq:number(r,10)||index+1,page:p};
+    return {seq:number(r,10)||index+1,page:convertSavedPageCoordinates({...p,coords_version:'legacy-excel-v1'})};
   });
   const lineups=lineupByTeam.flatMap((m,t)=>[...m].map(([name,p])=>({team_id:t===0?'away':'home',slot:p.slot,position_id:p.pos,uniform_no:p.no,batting_hand:p.bat,throwing_hand:p.throw,player_snapshot:{id:name,name,uniform_no:p.no}})));
   return {game,lineups,plays,masters:{ballTypes:[...new Set(data.map(r=>value(r,45)).filter(x=>x&&x!=='0'))].map(name=>({name,old_excel_label:name}))}};
