@@ -60,6 +60,7 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
     {const t=value(r,1).match(/(\d{1,2}:\d{2}:\d{2})/);if(t)p.time=t[1].padStart(8,'0');const d=value(r,1).match(/^\d{4}-\d{2}-\d{2}/);if(d)(p as any).date=d[0];}
     if(value(r,41)==='交代')(p as any).rowType='交代';
     if(value(r,190)==='クイック')p.flags.push('クイック');
+    if(value(r,191)&&value(r,191)!=='0')(p as any).pickoffStrength=value(r,191);
     if(value(r,55)&&value(r,55)!=='0')(p as any).errorLabel=value(r,55);
     if(value(r,49)&&!['0','ゴロ','フライ','ライナー'].includes(value(r,49)))(p as any).featureLabel=value(r,49);
     if(value(r,54)&&value(r,54)!=='0')(p as any).pickoffDetail=value(r,54);
