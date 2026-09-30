@@ -81,7 +81,8 @@ function AppLayout() {
         <Stack.Screen name="scoring/index" options={{ title: "試合記録", headerBackTitle: "戻る" }} />
         <Stack.Screen name="scoring/create" options={{ title: "新規試合入力", headerBackTitle: "試合記録" }} />
         <Stack.Screen name="scoring/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="scoring/master" options={{ title: "マスター管理", headerBackTitle: "戻る" }} />
+        <Stack.Screen name="scoring/masters" options={{ title: "マスター管理", headerBackTitle: "戻る" }} />
+        <Stack.Screen name="scoring/master" options={{ title: "マスター項目", headerBackTitle: "マスター管理" }} />
         <Stack.Screen name="scoring/manage" options={{ title: "試合管理", headerBackTitle: "試合記録" }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
