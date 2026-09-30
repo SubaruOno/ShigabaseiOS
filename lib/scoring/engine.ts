@@ -73,7 +73,10 @@ export function applyPage(st: GameState, p: Page) {
   const moveRunners = () => { let runs = 0; const next: (number | null)[] = [null, null, null];
     for (let i = 3; i >= 1; i--) { const id = st.bases[i - 1]; if (id == null) continue; const a = mv[i]; if (!a || (!a.out && !a.to)) { next[i - 1] = id; continue; } if (a.out) { st.outs++; continue; } if ((a.to || 0) >= 4) { if (!a.homeOut) runs++; else st.outs++; } else if (a.to) next[a.to - 1] = id; }
     const b = mv[0]; if (b?.out) st.outs++; else if (b?.to) { if (b.to >= 4) { if (!b.homeOut) runs++; else st.outs++; } else next[b.to - 1] = batter; }
-    st.bases = next; addRun(st, runs);
+    st.bases = next;
+    // 打者が一塁に着く前に3つ目のアウトになったら、その間に本塁を踏んでも得点にならない（野球規則5.08(a)例外）
+    if (b?.out && st.outs >= 3) runs = 0;
+    addRun(st, runs);
   };
   if (p.pickoff_throw_to) { moveRunners(); three(st); return; }
   if (p.skip) { if (!mv[0] || (!mv[0].out && !mv[0].to)) return; const out = !!mv[0].out; moveRunners(); endPA(st, out ? '凡退' : '出塁'); three(st); return; }
