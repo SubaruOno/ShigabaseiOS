@@ -126,3 +126,15 @@ describe('交代で出せない選手', () => {
     expect(subError(st, 1, 'P', st.lu[1].P)).toMatch('すでに投手');
   });
 });
+
+describe('大谷ルール', () => {
+  it('大谷ルールの試合だけ、投手を打順に入れられる', () => {
+    const st = initState(); const P = st.lu[0].P;
+    expect(subError(st, 0, 8, P)).toMatch('出場中');
+    expect(subError(st, 0, 8, P, true)).toBeNull();
+  });
+  it('大谷ルールでも、打順にいる野手を別の枠に入れるのは出場中として止める', () => {
+    const st = initState();
+    expect(subError(st, 0, 8, st.lu[0].order[2], true)).toMatch('出場中');
+  });
+});

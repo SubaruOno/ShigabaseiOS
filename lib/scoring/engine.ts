@@ -119,11 +119,13 @@ export function teamSetupsFromLineup(lineup: Array<{team_id:string;slot:number;r
 }
 
 /** 交代で出せない選手なら理由を返す（出場中・交代で退いた選手は出せない。守っている野手が投手に回るのはよい） */
-export function subError(st: GameState, t: number, slot: number | 'P', no: number): string | null {
+export function subError(st: GameState, t: number, slot: number | 'P', no: number, ohtani = false): string | null {
   const lu = st.lu[t];
   if ((st.gone?.[t] ?? []).includes(no)) return `#${no} は交代で退いたので、もう出られません`;
   if (slot === 'P') { if (lu.P === no) return `#${no} はすでに投手です`; return null; }
   if (lu.order[slot] === no) return null;
+  // 大谷ルールの試合では、投手が打順（DH）に入ってよい
+  if (ohtani && lu.P === no && !lu.order.includes(no)) return null;
   if (lu.order.includes(no) || lu.P === no) return `#${no} は出場中なので、代打・代走には出せません`;
   return null;
 }
