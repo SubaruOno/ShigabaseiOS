@@ -55,3 +55,13 @@ describe('BASS座標の旧ページの移行（Claude確認）', () => {
     const t = oldFieldPointFromBASS({ x: 46, y: 165 }); expect(t.x).toBeCloseTo(122 * 0.75); expect(t.y).toBeCloseTo(233 * 0.75);
   });
 });
+
+describe('新しく入れたページの座標は、読み込み直しても変わらない', () => {
+  it('blank() から作ったページは変換されない', async () => {
+    const { blank } = await import('./engine');
+    const p = { ...blank(), course: [131.25, 131.25] as [number, number], batted_ball: { x: 132, y: 136.5 } as any };
+    const again = convertSavedPageCoordinates(JSON.parse(JSON.stringify(p)));
+    expect(again.course).toEqual([131.25, 131.25]);
+    expect([again.batted_ball!.x, again.batted_ball!.y]).toEqual([132, 136.5]);
+  });
+});

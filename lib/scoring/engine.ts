@@ -17,7 +17,8 @@ export type GameState = {
   outs: number; b: number; s: number; bases: (number | null)[]; bi: [number, number];
   pcount: Record<number, number>; paLog: Record<string, string[]>; tie: boolean; gone: [number[], number[]]; subHalf: [number[], number[]]; lu: TeamSetup[];
 };
-export const blank = (): Page => ({ subs: [], tb: null, pitch_type: null, course: null, catcher_mitt_position: 0, ball_speed: '', res: null, flags: [], plan: {}, batted_ball: null, feature: 0, rank: null, catch_fielder: [], ra: {}, pickoff_throw_to: 0, skip: false, skipOut: null, memo: '', time: null, handP: null, handB: null });
+// 新しいページは最初から旧Excelの座標（ポイント）で入れるので、読み込み時に変換し直されないよう印を付けておく
+export const blank = (): Page => ({ coords_version: 'legacy-excel-v1', subs: [], tb: null, pitch_type: null, course: null, catcher_mitt_position: 0, ball_speed: '', res: null, flags: [], plan: {}, batted_ball: null, feature: 0, rank: null, catch_fielder: [], ra: {}, pickoff_throw_to: 0, skip: false, skipOut: null, memo: '', time: null, handP: null, handB: null });
 export const DEFAULT_TEAMS: TeamSetup[] = [
   { name: '滋賀大学(テスト)', order: [15, 5, 6, 9, 8, 7, 4, 3, 2], pos: [4, 5, 10, 8, 9, 7, 6, 3, 2], bats: ['右', '左', '左', '左', '左', '両', '左', '両', '右'], P: 1, throws: '左' },
   { name: '対戦校(テスト)', order: [7, 15, 8, 9, 4, 5, 6, 3, 2], pos: [9, 10, 7, 8, 3, 4, 5, 6, 2], bats: ['左', '両', '左', '左', '右', '左', '左', '右', '右'], P: 1, throws: '右' },

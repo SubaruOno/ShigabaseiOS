@@ -23,7 +23,7 @@ describe("scoring pages to analysis pitch rows",()=>{
     for(const [kind,label,extra,want] of cases){const result=rows([page(kind,label,extra)]);expect(result[0].batting_result).toBe(want);}
   });
   it("maps batted-ball feature and strength and preserves field coordinates",()=>{
-    const result=rows([page("out","凡打",{feature:3,rank:"A",batted_ball:{x:109,y:72}})])[0];
+    const result=rows([page("out","凡打",{coords_version:undefined,feature:3,rank:"A",batted_ball:{x:109,y:72}})])[0];
     expect([result.hit_type,result.hit_strength,result.hit_x,result.hit_y]).toEqual(["ライナー","A",oldFieldPointFromBASS({x:109,y:72}).x,oldFieldPointFromBASS({x:109,y:72}).y]);
     expect(rows([page("out","凡打",{feature:1,rank:"2"})])[0].hit_strength).toBe("B");
   });
