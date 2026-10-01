@@ -13,7 +13,7 @@ const value=(row:Saved191Row,col:number)=>row[col-1] == null?'':String(row[col-1
 const number=(row:Saved191Row,col:number)=>Number(value(row,col))||0;
 const hand=(s:string):Hand|null=>s==='左'?'左':s==='両'?'両':s==='右'?'右':null;
 const positions:Record<string,number>={P:1,C:2,'1B':3,'2B':4,'3B':5,SS:6,LF:7,CF:8,RF:9,D:10,H:11,R:12};
-const resultKind:Record<string,string|number>={見逃し:'FO',空振り:'FO',ボール:'B',ファール:'FO',ファウル:'FO',ハーフスイング:'FO',見逃し三振:'io',空振り三振:'io',単打:1,二塁打:2,三塁打:3,本塁打:4,ランニング本塁打:4,四球:'B',敬遠:'IBB',死球:'hbp',凡打死:'out',凡打出塁:'e',ファールフライ:'out',犠打:'sac',犠飛:'sf',エラー:'e',野手選択:'fc',振り逃げ:'e',スリーバント失敗:'io',打撃妨害:'io',守備妨害:'io',走塁妨害:'io',ボーク:'BK'};
+const resultKind:Record<string,string|number>={見逃し:'S',空振り:'S',ボール:'B',ファール:'FO',ファウル:'FO',ハーフスイング:'FO',見逃し三振:'S',空振り三振:'S',単打:1,二塁打:2,三塁打:3,本塁打:4,ランニング本塁打:4,四球:'B',敬遠:'IBB',死球:'hbp',凡打死:'out',凡打出塁:'e',ファールフライ:'out',犠打:'sac',犠飛:'sf',エラー:'e',野手選択:'fc',振り逃げ:'e',スリーバント失敗:'io',打撃妨害:'io',守備妨害:'io',走塁妨害:'io',ボーク:'BK'};
 
 /** Convert rows in saved-file order into editable game, lineup and page objects. */
 // keepNames: 旧Excelの選手名・チーム名をそのまま残す（アプリで取り込むときはこちら）。false はテスト用に仮の名前へ置き換える
@@ -26,6 +26,8 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
   const realName=new Map<string,string>();
   const lineupByTeam=[new Map<string,{no:number;pos:number;bat:Hand|null;throw:Hand|null;slot:number}>(),new Map<string,{no:number;pos:number;bat:Hand|null;throw:Hand|null;slot:number}>()];
   const currentSlots=[new Map<number,string>(),new Map<number,string>()];
+  // 各打順の今の守備位置（交代や守備変更を1回だけ記録するため、行ごとに更新する）
+  const currentPos=[new Map<number,number>(),new Map<number,number>()];
   const playerIds=[new Map<string,number>(),new Map<string,number>()];
   const safeName=(t:number,nm:string)=>{let id=playerIds[t].get(nm);if(!id){id=playerIds[t].size+1;playerIds[t].set(nm,id)}const key=`${t===0?'away':'home'}-player-${id}`;realName.set(key,nm);return key};
   const playerId=(t:number,nm:string)=>Number(safeName(t,nm).split('-').at(-1));
@@ -69,8 +71,10 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
       for(let slot=1;slot<=9;slot++){
         const sourceAfter=value(r,start+(slot-1)*2+1),before=currentSlots[t].get(slot)??'';if(!sourceAfter)continue;const after=safeName(t,sourceAfter);
         const posRaw=value(r,start+(slot-1)*2),entry=lineupByTeam[t].get(after),pos=positions[posRaw]??(Number(posRaw)||entry?.pos||10);
+        const was=currentPos[t].get(slot)??lineupByTeam[t].get(before)?.pos;
         if(before&&after!==before)p.subs.push({t:t as 0|1,slot:slot-1,no:entry?.no??playerId(t,after),bats:hand(value(r,handStart+(slot-1)*2))??undefined,pos});
-        else if(before&&pos!==lineupByTeam[t].get(before)?.pos)p.subs.push({t:t as 0|1,slot:slot-1,no:null,pos});
+        else if(before&&pos!==was)p.subs.push({t:t as 0|1,slot:slot-1,no:null,pos});
+        currentPos[t].set(slot,pos);
       }
       const sourceAfter=value(r,t===0?76:95),before=currentSlots[t].get(10)??'';
       if(sourceAfter&&before){const after=safeName(t,sourceAfter)+'#P';if(after!==before){const entry=lineupByTeam[t].get(after)??lineupByTeam[t].get(after.slice(0,-2));p.subs.push({t:t as 0|1,slot:'P',no:entry?.no??playerId(t,sourceAfter),throws:hand(value(r,t===0?114:134))??undefined,pos:1});}}

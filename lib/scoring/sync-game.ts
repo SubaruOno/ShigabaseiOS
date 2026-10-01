@@ -2,6 +2,7 @@ import { isUuid, playMutationId } from "./local-store";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
 import { scoreLine, toAnalysisPitches } from "@/lib/scoring/to-pitches";
+import { stateAt, teamSetupsFromLineup } from "@/lib/scoring/engine";
 
 type Lineup = { team_id: string; slot: number; roster_player_id: string; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; ohtani_rule?: boolean; player_snapshot?: Record<string, any> };
 
@@ -50,16 +51,20 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   for (const row of lineup) setupByTeam.set(row.team_id, [...setupByTeam.get(row.team_id) ?? [], row]);
   const currentIds: Record<0|1, Map<number,string>> = { 0: new Map(), 1: new Map() };
   for (const side of [0,1] as const) for (const row of setupByTeam.get(side === 0 ? game.away_team_id : game.home_team_id) ?? []) currentIds[side].set(row.slot, row.roster_player_id);
+  // 交代が何回の表裏かは、そのページの直前の状況から求める
+  const setups = teamSetupsFromLineup(lineup as any, [game.away_team_id, game.home_team_id], [game.away_name ?? "", game.home_name ?? ""]);
   for (const [index, play] of plays.entries()) {
+    const at = (play.page.subs ?? []).length ? stateAt(index, plays.map(x => x.page), setups) : null;
     for (const sub of play.page.subs ?? []) {
       const teamId = sub.t === 0 ? game.away_team_id : game.home_team_id;
       const prior = currentIds[sub.t].get(sub.slot === "P" ? 10 : sub.slot + 1) ?? null;
       const incomingNo = sub.no == null ? null : String(sub.no);
       const candidate = lineup.find(row => row.team_id === teamId && String(row.uniform_no ?? row.player_snapshot?.uniform_no ?? row.player_snapshot?.show_index) === incomingNo);
       const local = localPlayers.find(row => row.team_id === teamId && String(row.uniform_no ?? row.show_index) === incomingNo);
-      const incoming = candidate?.roster_player_id ?? (local ? playerIdMap.get(String(local.id)) : undefined);
+      // 背番号なしの交代は、同じ選手の守備位置だけの変更
+      const incoming = incomingNo == null ? prior ?? undefined : candidate?.roster_player_id ?? (local ? playerIdMap.get(String(local.id)) ?? local.id : undefined);
       if (!incoming) throw new Error(`第${index+1}プレイの交代選手（背番号${incomingNo ?? "?"}）が見つかりません`);
-      substitutions.push({ game_id: game.id, seq: play.seq, team_id: teamId, slot: sub.slot === "P" ? 10 : sub.slot + 1, replaced_player_id: prior, incoming_player_id: incoming, position_id: sub.pos ?? null, inning: Math.max(1, index + 1), half: sub.t });
+      substitutions.push({ game_id: game.id, seq: play.seq, team_id: teamId, slot: sub.slot === "P" ? 10 : sub.slot + 1, replaced_player_id: prior, incoming_player_id: incoming, position_id: sub.pos ?? null, inning: at?.inn ?? 1, half: at?.half ?? sub.t });
       currentIds[sub.t].set(sub.slot === "P" ? 10 : sub.slot + 1, incoming);
     }
   }

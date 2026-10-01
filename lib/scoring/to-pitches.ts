@@ -10,11 +10,14 @@ const num = (value: unknown): number | null => { const n = Number(value); return
 const positionName: Record<number, string> = { 1:"投手",2:"捕手",3:"一塁手",4:"二塁手",5:"三塁手",6:"遊撃手",7:"左翼手",8:"中堅手",9:"右翼手",10:"DH" };
 const hand = (value?: string | null) => value === "L" ? "左" : value === "S" ? "両" : "右";
 
+const OLD_RESULT_WORDS = new Set(["見逃し","空振り","ファール","ハーフスイング","見逃し三振","空振り三振","単打","二塁打","三塁打","本塁打","ランニング本塁打","四球","敬遠","死球","凡打死","凡打出塁","ファールフライ","犠打","犠飛","エラー","野手選択","振り逃げ","スリーバント失敗","ボーク"]);
 export function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
   const kind = page.res?.kind;
   // 旧Excelで専用の語がある結果は、種類より先に名前で決める
   const label = page.res?.label;
   if (label === "守備妨害" || label === "打撃妨害" || label === "走塁妨害") return label;
+  // 旧Excelから取り込んだページは、結果の言葉がすでに旧Excelの言葉なのでそのまま使う
+  if (label && OLD_RESULT_WORDS.has(label)) return label;
   if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? "凡打死";
   if (kind === "S") return page.res?.label === "空振" ? before.s >= 2 ? "空振り三振" : "空振り" : before.s >= 2 ? "見逃し三振" : "見逃し";
   if (kind === "B") return before.b >= 3 ? "四球" : "ボール";
@@ -101,7 +104,8 @@ export function scoreLine(input: { plays: LocalPlay[]; lineup: LineupRow[]; team
     if (!page.res && !page.pickoff_throw_to && !(page.skip && !!(page.ra[0]?.out || page.ra[0]?.to))) continue;
     applyPage(state, page);
   }
-  const inningCount = Math.max(state.inn, state.line[0].length, state.line[1].length);
+  // 実際にプレイがあった回まで（最後のアウトのあと次の回へ進んだ分は数えない）
+  const inningCount = Math.max(state.line[0].length, state.line[1].length);
   const fillInnings = (line: number[]) => Array.from({ length: inningCount }, (_, inning) => line[inning] ?? 0);
   return { awayScore: state.score[0], homeScore: state.score[1], awayRunsPerInning: fillInnings(state.line[0]), homeRunsPerInning: fillInnings(state.line[1]) };
 }
