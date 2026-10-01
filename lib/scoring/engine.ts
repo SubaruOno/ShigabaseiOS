@@ -11,7 +11,7 @@ export type Page = {
   catch_fielder: (number | { pos: number; err?: string })[]; ra: Record<number, Move>; pickoff_throw_to: number;
   skip: boolean; skipOut: boolean | null; memo: string; time: string | null; handP: Hand | null; handB: Hand | null;
   /** 旧Excelから取り込んだ試合だけ：元の記録の状況とアプリの計算が食い違う行で、元の状況に合わせ直す（行の削除・書き換えの跡） */
-  sync?: { inn: number; half: 0 | 1; score: [number, number]; outs: number; b: number; s: number; bases: (number | null)[]; bi: number; pc?: number } | null;
+  sync?: { inn: number; half: 0 | 1; score: [number, number]; outs: number; b: number; s: number; bases: (number | null)[]; bi: number; pc?: number; pcBeforeSubs?: boolean } | null;
 };
 export type TeamSetup = { name: string; order: number[]; pos: number[]; bats: Hand[]; P: number; throws: Hand };
 export type GameState = {
@@ -64,13 +64,15 @@ export function moves(st: GameState, p: Page): Record<number, Move> {
 }
 export function applyPre(st: GameState, p: Page) {
   // 合わせ直しは「この行の変更（交代など）を入れる前」の状況なので、最初に当てる
-  if (p.sync) { const y = p.sync; if (y.half !== st.half || y.inn !== st.inn) { st.subHalf[st.half] = []; } st.inn = y.inn; st.half = y.half; st.score = [...y.score] as [number, number]; st.outs = y.outs; st.b = y.b; st.s = y.s; st.bases = [...y.bases]; st.bi[y.half] = y.bi; if (y.pc != null) st.pcount[(1 - y.half) * 1000 + st.lu[1 - y.half].P] = y.pc; }
+  if (p.sync) { const y = p.sync; if (y.half !== st.half || y.inn !== st.inn) { st.subHalf[st.half] = []; } st.inn = y.inn; st.half = y.half; for (const t of [0, 1]) { const d = y.score[t] - st.score[t]; if (d) { const line = st.line[t]; const i = line.length ? line.length - 1 : 0; line[i] = (line[i] ?? 0) + d; } } st.score = [...y.score] as [number, number]; st.outs = y.outs; st.b = y.b; st.s = y.s; st.bases = [...y.bases]; st.bi[y.half] = y.bi; if (y.pc != null && y.pcBeforeSubs) st.pcount[(1 - y.half) * 1000 + st.lu[1 - y.half].P] = y.pc; }
   for (const c of p.subs || []) { const lineup = st.lu[c.t]; if (c.slot === 'P') { if (c.no != null && c.no !== lineup.P) { const oldP = lineup.P; lineup.P = c.no; if (!lineup.order.includes(oldP)) st.gone[c.t].push(oldP); } if (c.throws) lineup.throws = c.throws; continue; }
     const old = lineup.order[c.slot]; if (c.no != null && c.no !== old) { lineup.order[c.slot] = c.no; if (!lineup.order.includes(old) && lineup.P !== old) st.gone[c.t].push(old); if (c.bats) lineup.bats[c.slot] = c.bats; // 代走（塁上の選手を代えた）と代打（今の打者の枠を代えた）を分けて覚える。旧Excelの R・H の印に使う
       if (c.t === st.half) { if (st.bases.includes(old)) (st.pr ??= [[], []])[c.t].push(c.slot); else if (c.slot === st.bi[c.t]) (st.ph ??= [[], []])[c.t].push(c.slot); st.bases = st.bases.map(id => id === old ? c.no : id); } st.subHalf[c.t].push(c.slot); }
     if (c.no == null && c.bats) lineup.bats[c.slot] = c.bats;
     if (c.pos != null) lineup.pos[c.slot] = c.pos;
   }
+  // 球数の合わせ直しは、交代を入れた後の投手に当てる
+  if (p.sync?.pc != null && !p.sync.pcBeforeSubs) st.pcount[(1 - st.half) * 1000 + st.lu[1 - st.half].P] = p.sync.pc;
   if (p.tb) { const lineup = st.lu[st.half]; st.tie = true; st.bi[st.half] = p.tb.bi; st.bases = p.tb.r.map(i => i == null ? null : lineup.order[i]); st.b = p.tb.b || 0; st.s = p.tb.s || 0; st.outs = p.tb.o || 0; }
 }
 export function three(st: GameState) { if (st.outs >= 3) { st.outs = 0; st.b = 0; st.s = 0; st.bases = [null, null, null]; st.subHalf[st.half] = []; if (st.pr) st.pr[st.half] = []; if (st.ph) st.ph[st.half] = []; if (st.half) { st.half = 0; st.inn++; } else st.half = 1; } }

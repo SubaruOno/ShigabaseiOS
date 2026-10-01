@@ -59,7 +59,8 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
     const to:Record<string,number>={継続:0,残留:0,二進:2,三進:3,本進:4};
     for(let base=1;base<=3;base++) {const status=value(r,36+base);if(!status||status==='0')continue;const dest=to[status];// 「継続」はふつうの状態なので何も入れない。「残留」は打球のときに手で止めた印。アウトは旧Excelの言葉を残す
       // 継続＝その場に留まる（自動で進めない）、残留＝打球で手で止めた
-      if(status==='継続'){p.ra[base]={back:true,hold:false} as any;continue}if(status==='残留'){p.ra[base]={back:true,hold:true} as any;continue}p.ra[base]=status.includes('死')||status==='封殺'?{out:true,outLabel:status} as any:dest?{to:dest}:{back:true,label:status} as any;}
+      if(status==='継続'){p.ra[base]={back:true,hold:false} as any;continue}if(status==='残留'){p.ra[base]={back:true,hold:true} as any;continue}// アウトの言葉：〇〇死・封殺・飛出アウト・アピールアウト・〇進タッチアウト など
+      p.ra[base]=status.includes('死')||status==='封殺'||status.includes('アウト')?{out:true,outLabel:status} as any:dest?{to:dest}:{back:true,label:status} as any;}
     const bst=value(r,40);if(bst==='アウト'||bst==='出塁'||bst==='二進'||bst==='三進'||bst==='本進')p.ra[0]=bst==='アウト'?{out:true}:{to:bst==='出塁'?1:bst==='二進'?2:bst==='三進'?3:4};
     const type=value(r,41);if(type==='牽制'&&!p.pickoff_throw_to)p.pickoff_throw_to=({一塁牽制:1,二塁牽制:2,三塁牽制:3} as Record<string,number>)[value(r,53)]??1;
     if(value(r,30)&&value(r,30)!=='0')p.plan.code=value(r,30);
@@ -71,6 +72,10 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
     if(hand(value(r,29)))p.handB=hand(value(r,29));
     // 投手氏名（33列）も行ごとの記録（交代の行より先に投手欄を変えることがある）
     if(value(r,33)&&value(r,33)!=='0')(p as any).pitcherRec=value(r,33);
+    // フォームに表示されていた欄（投手左右・捕手・首振り・打順ごとの左右・投手の左右）も行ごとの記録として持つ
+    (p as any).rec={disp:Object.fromEntries([21,22,23,24,25,26,27,28,37,38,39,40,53,57,...Array.from({length:38},(_,k)=>58+k),...Array.from({length:30},(_,k)=>137+k)].map(c=>[c,value(r,c)])),c34:value(r,34),c36:value(r,36),c136:value(r,136),hands:Array.from({length:40},(_,k)=>value(r,96+k))};
+    if(value(r,41)&&!['投球','牽制','交代'].includes(value(r,41)))(p as any).rowType=value(r,41);
+    if(value(r,40)==='残留')(p as any).batterLabel='残留';
     // 旧Excelの入力欄の値（投手の球種1〜4、区切りの印、打撃結果２）は取り込んだまま持つ
     {const a=[167,168,169,170].map(c=>value(r,c)==='0'?'':value(r,c)),h=[171,172,173,174].map(c=>value(r,c)==='0'?'':value(r,c));(p as any).pitchTypes=[a,h];}
     (p as any).marks={inning:value(r,19),game:value(r,20)};
@@ -106,7 +111,8 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
    const noOf=(t:number,nm:string)=>{if(!nm||nm==='0')return null;const e=lineupByTeam[t].get(safeName(t,nm));return e?.no??null};
    plays.forEach((pl,i)=>{const r=data[i];const half=(value(r,12)==='裏'?1:0) as 0|1;
      const bases=[22,24,26].map(c=>noOf(half,value(r,c)));const batNo=noOf(half,value(r,28));const bi=batNo!=null&&st.lu[half].order.includes(batNo)?st.lu[half].order.indexOf(batNo):Math.max(0,(number(r,27)||1)-1);
-     const pcNow=st.pcount[(1-half)*1000+st.lu[1-half].P]??0;const want={inn:number(r,11)||st.inn,half,score:[number(r,13),number(r,14)] as [number,number],outs:number(r,17),b:number(r,16),s:number(r,15),bases,bi,pc:Math.max(0,number(r,35)-1)};
+     // 交代の行の球数は交代前の投手、それ以外は交代後の投手の数
+     const subRow=value(r,41)==='交代';const tmp=structuredClone(st);if(!subRow)applyPre(tmp,{...pl.page,sync:null,tb:null} as Page);const pcNow=tmp.pcount[(1-half)*1000+tmp.lu[1-half].P]??0;const want={inn:number(r,11)||st.inn,half,score:[number(r,13),number(r,14)] as [number,number],outs:number(r,17),b:number(r,16),s:number(r,15),bases,bi,pc:Math.max(0,number(r,35)-1),pcBeforeSubs:subRow};
      const same=want.inn===st.inn&&want.half===st.half&&want.score[0]===st.score[0]&&want.score[1]===st.score[1]&&want.outs===st.outs&&want.b===st.b&&want.s===st.s&&want.bi===st.bi[half]&&bases.every((x,k)=>x===st.bases[k])&&(number(r,35)<=0||want.pc===pcNow);
      if(!same)pl.page.sync=want;
      applyPage(st,pl.page);});}
