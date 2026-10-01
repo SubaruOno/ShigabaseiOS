@@ -99,13 +99,16 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     const fielder=(f: number|{pos:number;err?:string})=>typeof f==='number'? defender.order[defender.pos.indexOf(f)] : defender.order[defender.pos.indexOf(f.pos)];
     // 走者の動きは、結果から自動で決まる分も含めて書く（旧マクロは「本進」の数を打点として数える）
     const mv=moves(before,p) as Record<number,{to?:number;out?:boolean}>;
-    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,ballRank:p.rank??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:(p as any).featureLabel??({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':(p as any).rowType??(p.subs.length&&!p.res?'交代':'投球'),// 旧Excelの捕球選手は、最初に捕った野手の守備番号（1〜9）
+    const play: PlayExportInfo={result,result2:p.flags.find(x=>x==='WP'||x==='PB'),pitchType,pitchSpeed:Number(p.ball_speed)||0,course:p.course??undefined,ballType:undefined,// 強さは旧Excelと同じ A・B・C（X は記録なし）。古いページの数字（1〜3）も読み替える
+    ballRank:({'1':'A','2':'B','3':'C','A':'A','B':'B','C':'C'} as Record<string,string>)[String(p.rank??'')]??undefined,ballXY:p.batted_ball?[p.batted_ball.x,p.batted_ball.y]:undefined,featureName:(p as any).featureLabel??({1:'ゴロ',2:'フライ',3:'ライナー'} as Record<number,string>)[p.feature],pitchSetup:p.catcher_mitt_position,playType:p.pickoff_throw_to?'牽制':(p as any).rowType??(p.subs.length&&!p.res?'交代':'投球'),// 旧Excelの捕球選手は、最初に捕った野手の守備番号（1〜9）
     catchFielder:p.catch_fielder.length?String(typeof p.catch_fielder[0]==='number'?p.catch_fielder[0]:p.catch_fielder[0].pos):'0',errorLabel:(p as any).errorLabel,operation:planNames[0],operationResult:(p as any).planResult,dateTime:p.time&&info.dateTime?`${(p as any).date??String(info.dateTime).slice(0,10)} ${p.time}`:undefined,pickoffDetail:(p as any).pickoffDetail,pickoffStrength:(p as any).pickoffStrength,operationDetail:planNames[1],handB:p.handB??undefined,skipPa:p.skip,runnerStatus:[1,2,3].map(base=>{const m=mv[base];return before.bases[base-1]==null?undefined:m?.out?(p.ra[base] as any)?.outLabel??(p.pickoff_throw_to?'投手牽制死':'封殺'):m?.to===2?'二進':m?.to===3?'三進':(m?.to??0)>=4?'本進':(p.ra[base] as any)?.back&&((p.ra[base] as any).hold??['out','sac','sf','e','fc',1,2,3].includes(p.res?.kind as never))?'残留':undefined}) as [string,string,string],batterStatus:mv[0]?.out?'アウト':mv[0]?.to===1?'出塁':mv[0]?.to===2?'二進':mv[0]?.to===3?'三進':(mv[0]?.to??0)>=4?'本進':undefined,quick:undefined};
     const after=structuredClone(before);applyPage(after,p);
     play.paEnd=after.bi[before.half]!==before.bi[before.half];
     const prevBefore=index>0?stateAt(index-1,clean.map(x=>x.page),setup,true):null;const startHalf=!prevBefore||prevBefore.half!==before.half||prevBefore.inn!==before.inn;
     play.inning=after.half!==before.half||after.inn!==before.inn?'イニング完了':startHalf?'イニング開始':'イニング継続';
-    play.gameMark=index===0?'試合開始':index===clean.length-1?'試合終了':'試合継続';
+    // 試合終了は、試合が終わっている（入力中・中断でない）ときの最後の行だけ
+    const ended=!(game as any).status||(game as any).status==='completed';
+    play.gameMark=index===0?'試合開始':index===clean.length-1&&ended?'試合終了':'試合継続';
     if(subRow)play.lineupState=stateAt(index,clean.map(x=>x.page),setup,true);
     {const fill=(stt:GameState)=>{const t=1-stt.half,lu=stt.lu[t];fielders={};lu.order.forEach((no,slot)=>{const pos=lu.pos[slot];if(pos>=1&&pos<=9)fielders[pos]=info.playerNames?.[t]?.[String(no)]??info.lineupNames[t][info.lineupNos?.[t].indexOf(no)??-1]??String(no)});shown={...fielders}};
      // 新しい行を画面に用意したとき（試合開始・前の行がイニング完了）に、その行の交代を入れる前の並びで書く
