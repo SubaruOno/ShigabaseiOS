@@ -11,6 +11,18 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   const deviceId = await localStore.deviceId();
   const localPlayers = [...await localStore.rosterPlayers(game.away_team_id), ...await localStore.rosterPlayers(game.home_team_id)];
   const playerIdMap = new Map<string, string>();
+  // 選手交代で、名簿にない背番号が入っていたら「背番号○○」という仮の選手として登録する（試合中に名簿にない選手が出ても同期が止まらないように）
+  for (const play of plays) for (const sub of play.page.subs ?? []) {
+    if (sub.no == null) continue;
+    const teamId = sub.t === 0 ? game.away_team_id : game.home_team_id;
+    const no = String(sub.no);
+    const inLineup = (game.lineup as any[] ?? []).some(r => r.team_id === teamId && String(r.uniform_no ?? r.player_snapshot?.uniform_no ?? r.player_snapshot?.show_index) === no);
+    const inRoster = localPlayers.some(r => r.team_id === teamId && String(r.uniform_no ?? r.show_index) === no);
+    if (inLineup || inRoster) continue;
+    const added = { id: `local-sub-${teamId}-${no}`, team_id: teamId, name: `背番号${no}`, name_s: no, uniform_no: Number(no), show_index: Number(no), provisional: true, retired: false, primary_position_id: 10 };
+    localPlayers.push(added);
+    await localStore.saveRosterPlayers(teamId, [...await localStore.rosterPlayers(teamId), added]);
+  }
   for (const player of localPlayers.filter(p => p.provisional && String(p.id).startsWith("local-"))) {
     const id = String(player.sync_id ?? uuid());
     player.sync_id = id;

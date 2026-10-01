@@ -30,7 +30,8 @@ export function export191Row(st: GameState, page: Page, info: GameExportInfo, pl
   put(18,play.paEnd?'打席完了':'打席継続');put(19,play.inning??'イニング継続');put(20,play.gameMark??'試合継続');
   st.bases.forEach((id,i)=>{if(id==null){put(21+i*2,0);put(22+i*2,0);put(37+i,0);return}const slot=st.lu[side].order.indexOf(Number(id));put(21+i*2,slot>=0?(st.pr?.[side]?.includes(slot)?'R':slot+1):'R');put(22+i*2,nameFor(side,id));put(37+i,play.runnerStatus?.[i] || '継続');});
   put(27,st.ph?.[side]?.includes(batNo)?'H':batNo+1);put(28,nameFor(side,batter));put(29,page.handB??(st.lu[side].bats[batNo]==='両'?play.handB??info.hands[side][batNo]:st.lu[side].bats[batNo]));put(30,play.operation??0);put(31,play.operationDetail??0);put(32,play.operationResult??0);put(33,(page as any).pitcherRec??nameFor(1-side,pitcher));put(34,st.lu[1-side].throws);// 球数は、それまでの球数＋1（旧Excelは牽制・交代の行でも「次の球の番号」を入れる）
-  const thisPitch=1;put(35,play.pitchCount??(st.pcount[(1-side)*1000+pitcher]??0)+thisPitch);const catcherSlot=st.lu[1-side].pos.indexOf(2);put(36,catcherSlot>=0?nameFor(1-side,st.lu[1-side].order[catcherSlot]):'');put(40,play.batterStatus??0);put(41,play.playType || '投球');put(42,play.pitchSetup??0);put(43,play.course?.[0]??0);put(44,play.course?.[1]??0);put(45,play.pitchType??0);put(46,play.result??0);put(47,play.result2??0);put(48,play.catchFielder??0);put(49,play.featureName??0);put(50,play.ballRank??0);put(51,play.ballXY?.[0]??0);put(52,play.ballXY?.[1]??0);put(53,(page as any).pickoffLabel??(page.pickoff_throw_to?`${['','一','二','三'][page.pickoff_throw_to]}塁牽制`:0));put(54,play.pickoffDetail??0);put(55,play.errorLabel??0);put(56,0);put(57,play.pitchSpeed??0);
+  const thisPitch=1;put(35,play.pitchCount??(st.pcount[(1-side)*1000+pitcher]??0)+thisPitch);const catcherSlot=st.lu[1-side].pos.indexOf(2);put(36,catcherSlot>=0?nameFor(1-side,st.lu[1-side].order[catcherSlot]):'');put(40,play.batterStatus??0);put(41,play.playType || '投球');put(42,play.pitchSetup??0);// 座標は旧Excelと同じく小数2桁まで
+  const r2=(v:number|undefined)=>v==null?0:Math.round(v*100)/100;put(43,r2(play.course?.[0]));put(44,r2(play.course?.[1]));put(45,play.pitchType??0);put(46,play.result??0);put(47,play.result2??0);put(48,play.catchFielder??0);put(49,play.featureName??0);put(50,play.ballRank??0);put(51,r2(play.ballXY?.[0]));put(52,r2(play.ballXY?.[1]));put(53,(page as any).pickoffLabel??(page.pickoff_throw_to?`${['','一','二','三'][page.pickoff_throw_to]}塁牽制`:0));put(54,play.pickoffDetail??0);put(55,play.errorLabel??0);put(56,0);put(57,play.pitchSpeed??0);
   // 旧Excelの「交代」の行は、打順・守備の欄（58〜135列）だけ交代後の並びを書く
   const LU=(play.lineupState??st).lu;
   for(let team=0;team<2;team++){const base=team===0?58:77;for(let slot=0;slot<9;slot++){put(base+slot*2,posCode(LU[team].pos[slot]));put(base+slot*2+1,nameFor(team,LU[team].order[slot]));}put(team===0?76:95,nameFor(team,LU[team].P));}
@@ -111,8 +112,10 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     if(subRow&&(item.page as any).sync)applyPre(before,{...item.page,subs:[],tb:null} as Page);
     const p=convertSavedPageCoordinates(item.page);
     // 打撃結果は旧Excelの言葉で書く（カウントで決まる「見逃し三振」「四球」なども含め、投球データと同じ変換を使う）
-    const result = p.res ? resultWords(p,before) ?? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
-    const pitchType = p.pitch_type ? masters.ballTypes?.find(x=>x.name===p.pitch_type)?.old_excel_label ?? p.pitch_type : undefined;
+    // 旧Excel：ボークの行は打撃結果・球種とも0、走塁妨害は打撃結果0で打撃結果２に「走塁妨害」
+    const legacyBlank = p.res?.kind==='BK'||p.res?.label==='走塁妨害';
+    const result = legacyBlank ? undefined : p.res ? resultWords(p,before) ?? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
+    const pitchType = p.res?.kind==='BK' ? undefined : p.pitch_type ? masters.ballTypes?.find(x=>x.name===p.pitch_type)?.old_excel_label ?? p.pitch_type : undefined;
     const planNames=Object.values(p.plan??{}).filter(Boolean).map(v=>masters.plans?.find(x=>x.id===String(v)||x.name===String(v))?.old_excel_label??String(v));
     const defender=before.lu[1-before.half];
     const fielder=(f: number|{pos:number;err?:string})=>typeof f==='number'? defender.order[defender.pos.indexOf(f)] : defender.order[defender.pos.indexOf(f.pos)];
