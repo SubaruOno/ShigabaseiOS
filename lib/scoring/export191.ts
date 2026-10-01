@@ -14,7 +14,7 @@ export const COLUMN191_HEADERS = [
 ] as const;
 
 export type GameExportInfo = { dateTime: string; season: string; kind: string; week: string; day: string; gameNumber: number; homeTeam: string; awayTeam: string; umpire?: string; scorer?: string; startPlayNo?: number; pitcherNames: [string,string]; catcherNames: [string,string]; lineupNames: [string[],string[]]; lineupPositions: [string[],string[]]; lineupNos?: [number[],number[]]; playerNames?: [Record<string,string>,Record<string,string>]; hands: [string[],string[]]; pitcherHands: [string,string]; };
-export type PlayExportInfo = { errorLabel?: string; dateTime?: string; paEnd?: boolean; inning?: string; gameMark?: string; result?: string; result2?: string; pitchType?: string; pitchSpeed?: number; pitchCount?:number; course?: [number,number]; ballType?: string; ballRank?: string; ballXY?: [number,number]; featureName?: string; pitchSetup?: number; runnerStatus?: [string,string,string]; batterStatus?: string; playType?: string; catchFielder?: string; operation?: string; operationDetail?: string; operationResult?: string; pickoffDetail?: string; pickoffStrength?: string; quick?: string; handB?:string; skipPa?: boolean; };
+export type PlayExportInfo = { fielders?: Record<number,string>; lineupState?: GameState; errorLabel?: string; dateTime?: string; paEnd?: boolean; inning?: string; gameMark?: string; result?: string; result2?: string; pitchType?: string; pitchSpeed?: number; pitchCount?:number; course?: [number,number]; ballType?: string; ballRank?: string; ballXY?: [number,number]; featureName?: string; pitchSetup?: number; runnerStatus?: [string,string,string]; batterStatus?: string; playType?: string; catchFielder?: string; operation?: string; operationDetail?: string; operationResult?: string; pickoffDetail?: string; pickoffStrength?: string; quick?: string; handB?:string; skipPa?: boolean; };
 
 // 守備の印：1〜9、D（DH）、H（代打で守備未定）、R（代走で守備未定）
 const posCode = (n: number) => n === 10 ? 'D' : n === 11 ? 'H' : n === 12 ? 'R' : n >= 1 && n <= 9 ? String(n) : '';
@@ -30,14 +30,16 @@ export function export191Row(st: GameState, page: Page, info: GameExportInfo, pl
   st.bases.forEach((id,i)=>{if(id==null){put(21+i*2,0);put(22+i*2,0);put(37+i,0);return}const slot=st.lu[side].order.indexOf(Number(id));put(21+i*2,slot>=0?(st.pr?.[side]?.includes(slot)?'R':slot+1):'R');put(22+i*2,nameFor(side,id));put(37+i,play.runnerStatus?.[i] || '継続');});
   put(27,st.ph?.[side]?.includes(batNo)?'H':batNo+1);put(28,nameFor(side,batter));put(29,st.lu[side].bats[batNo]==='両'?play.handB??info.hands[side][batNo]:st.lu[side].bats[batNo]);put(30,play.operation??0);put(31,play.operationDetail??0);put(32,play.operationResult??0);put(33,nameFor(1-side,pitcher));put(34,st.lu[1-side].throws);// 球数は、それまでの球数＋1（旧Excelは牽制・交代の行でも「次の球の番号」を入れる）
   const thisPitch=1;put(35,play.pitchCount??(st.pcount[(1-side)*1000+pitcher]??0)+thisPitch);const catcherSlot=st.lu[1-side].pos.indexOf(2);put(36,catcherSlot>=0?nameFor(1-side,st.lu[1-side].order[catcherSlot]):'');put(40,play.batterStatus??0);put(41,play.playType || '投球');put(42,play.pitchSetup??0);put(43,play.course?.[0]??0);put(44,play.course?.[1]??0);put(45,play.pitchType??0);put(46,play.result??0);put(47,play.result2??0);put(48,play.catchFielder??0);put(49,play.featureName??0);put(50,play.ballRank??0);put(51,play.ballXY?.[0]??0);put(52,play.ballXY?.[1]??0);put(53,page.pickoff_throw_to?`${['','一','二','三'][page.pickoff_throw_to]}塁牽制`:0);put(54,play.pickoffDetail??0);put(55,play.errorLabel??0);put(56,0);put(57,play.pitchSpeed??0);
-  for(let team=0;team<2;team++){const base=team===0?58:77;for(let slot=0;slot<9;slot++){put(base+slot*2,posCode(st.lu[team].pos[slot]));put(base+slot*2+1,nameFor(team,st.lu[team].order[slot]));}put(team===0?76:95,nameFor(team,st.lu[team].P));}
+  // 旧Excelの「交代」の行は、打順・守備の欄（58〜135列）だけ交代後の並びを書く
+  const LU=(play.lineupState??st).lu;
+  for(let team=0;team<2;team++){const base=team===0?58:77;for(let slot=0;slot<9;slot++){put(base+slot*2,posCode(LU[team].pos[slot]));put(base+slot*2+1,nameFor(team,LU[team].order[slot]));}put(team===0?76:95,nameFor(team,LU[team].P));}
   for(let team=0;team<2;team++){const start=team===0?96:116;// 各打順は「○打」（左右）と「タイプ」（空）の2列。1番の○打が96列目（後攻は116列目）
-    for(let slot=0;slot<9;slot++){put(start+slot*2,st.lu[team].bats[slot]);put(start+slot*2+1,'');}put(team===0?114:134,st.lu[team].throws);}
+    for(let slot=0;slot<9;slot++){put(start+slot*2,LU[team].bats[slot]);put(start+slot*2+1,'');}put(team===0?114:134,LU[team].throws);}
   // スコアボードは、終わった表・裏だけ書く（進行中の回は空）
   const done=(t:number,i:number)=>i+1<st.inn||(i+1===st.inn&&t<side);const cell=(t:number,i:number)=>done(t,i)?st.line[t][i]??0:(i+1===st.inn&&t===side&&(st.line[t][i]??0)>0?st.line[t][i]:'');
   for(let i=0;i<15;i++){put(137+i,cell(0,i));put(152+i,cell(1,i));}
   // Columns 175-181 are current defending 1B through RF player names.
-  for(let pos=3;pos<=9;pos++){const slot=st.lu[1-side].pos.findIndex(v=>v===pos);put(172+pos,slot>=0?nameFor(1-side,st.lu[1-side].order[slot]):'');}
+  for(let pos=3;pos<=9;pos++){if(play.fielders){put(172+pos,play.fielders[pos]??'');continue}const slot=st.lu[1-side].pos.findIndex(v=>v===pos);put(172+pos,slot>=0?nameFor(1-side,st.lu[1-side].order[slot]):'');}
   put(182,info.scorer);put(190,page.flags?.includes('クイック')?'クイック':0);put(136,0);put(191,'');put(191,play.pickoffStrength??'');
   if(play.skipPa){ put(41,'投球');put(45,'0');put(43,0);put(44,0);put(46,play.result);put(40,play.batterStatus); }
   return row;
@@ -79,6 +81,10 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     pitcherHands: ids.map(id=>handJa(pitcher(id)?.throwing_hand)==='左'?'左':'右') as [string,string],
   };
   const clean = plays;
+  // 旧VBA（GameData.frm）の守備位置ごとの氏名（175〜181列）の書き方を再現する：
+  // 試合開始・攻守交代の最初の行・交代の行でだけ、守備側の打順を1番から見て（D・H・R以外）入れ物に書き、ほかの行は前の行を引き継ぐ。
+  // 書くたびに入れ物を空にする（旧VBAはフォームを閉じるたびに入れ物が空になる）。
+  let fielders:Record<number,string>={};let shown:Record<number,string>={};let prevInning='';
   return clean.map((item,index)=>{
     // 「交代」の行は、旧Excelでは交代前の選手のまま書き、次の行から新しい選手になる
     const subRow=(item.page as any).rowType==='交代';
@@ -98,6 +104,13 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     const prevBefore=index>0?stateAt(index-1,clean.map(x=>x.page),setup,true):null;const startHalf=!prevBefore||prevBefore.half!==before.half||prevBefore.inn!==before.inn;
     play.inning=after.half!==before.half||after.inn!==before.inn?'イニング完了':startHalf?'イニング開始':'イニング継続';
     play.gameMark=index===0?'試合開始':index===clean.length-1?'試合終了':'試合継続';
+    if(subRow)play.lineupState=stateAt(index,clean.map(x=>x.page),setup,true);
+    {const fill=(stt:GameState)=>{const t=1-stt.half,lu=stt.lu[t];fielders={};lu.order.forEach((no,slot)=>{const pos=lu.pos[slot];if(pos>=1&&pos<=9)fielders[pos]=info.playerNames?.[t]?.[String(no)]??info.lineupNames[t][info.lineupNos?.[t].indexOf(no)??-1]??String(no)});shown={...fielders}};
+     // 新しい行を画面に用意したとき（試合開始・前の行がイニング完了）に、その行の交代を入れる前の並びで書く
+     if(index===0||prevInning==='イニング完了')fill(before);
+     // 日をまたいで（翌日にフォームを開き直して）続けた場合、前日の最後の行が交代の行なら、その行を交代後の並びで書き直している
+     const nextDate=(clean[index+1]?.page as any)?.date;if(subRow&&nextDate&&(p as any).date&&nextDate!==(p as any).date)fill(play.lineupState!);
+     play.fielders=shown;prevInning=play.inning??'';}
     const row=export191Row(before,p,info,item.seq,play);
     return row;
   });
