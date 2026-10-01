@@ -49,7 +49,7 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   const lineup = ((game.lineup ?? []) as Lineup[]).map(remapPlayer);
 
   const { error: gameError } = await supabase.from("scoring_games").upsert({ id: game.id, display_game_number: game.display_game_number, game_date: game.game_date, game_time: game.game_time, stadium_id: game.stadium_id ?? null, weather_id: game.weather_id ?? null, method: game.method, home_team_id: game.home_team_id, away_team_id: game.away_team_id, season: game.season, kind: game.kind, week: game.week, day: game.day, game_number: game.game_number, umpire: game.umpire ?? null, tags: game.tags, status: game.status, created_by: userId }, { onConflict: "id" });
-  if (gameError) throw new Error(`試合情報を同期できませんでした: ${gameError.message}`);
+  if (gameError) throw new Error(gameError.code === "23505" && /season_kind_week_day_game_number/.test(gameError.message) ? `${game.season}${game.kind} ${game.week}週-${game.day}日-第${game.game_number}試合 は別の試合としてすでに同期されています。試合の週・日・第何試合を確認してください` : `試合情報を同期できませんでした: ${gameError.message}`);
   if (lineup.length) {
     const { error } = await supabase.from("scoring_lineups").upsert(lineup.map(row => ({ game_id: game.id, ...row })), { onConflict: "game_id,team_id,slot" });
     if (error) throw new Error(`先発メンバーを同期できませんでした: ${error.message}`);

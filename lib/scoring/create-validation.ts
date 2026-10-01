@@ -23,3 +23,13 @@ export function validateCreateGame(d: CreateGameDraft) {
 }
 
 export function canStartGame(games: {status:string}[]) { return !games.some(g=>g.status==="in_progress"); }
+
+// 季節・種別・週・日・第何試合が同じ試合は、データベースで1つしか持てない
+export type GameKey = { season?: string|null; kind?: string|null; week?: string|null; day?: string|null; game_number?: number|string|null };
+export const gameKeyOf = (g: GameKey) => [g.season, g.kind, g.week, g.day, g.game_number].map(x => String(x ?? "").trim()).join("|");
+export function sameGameExists(games: (GameKey & { id?: string })[], key: GameKey, selfId?: string) {
+  if (key.kind !== "リーグ戦") return false;
+  const k = gameKeyOf(key);
+  return games.some(g => g.id !== selfId && gameKeyOf(g) === k);
+}
+export const duplicateGameMessage = (k: GameKey) => `${k.season}${k.kind} ${k.week}週-${k.day}日-第${k.game_number}試合 はすでに作られています。週・日・第何試合を確認してください`;

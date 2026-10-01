@@ -3,6 +3,9 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import { Alert } from "react-native";
+import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { withTimeout } from "@/lib/scoring/net";
 
 type AppRole = "player" | "analyst" | "admin" | "ob";
 
@@ -28,16 +31,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signingUp = useRef(false);
 
   const fetchUserRoles = async (userId: string): Promise<AppRole[]> => {
+    // 球場など電波がない所で開き直しても試合記録に入れるよう、前回のロールを端末に控えておく
+    // （画面の出し分けにだけ使う。データの読み書きはデータベース側の権限で守られている）
+    const key = `shigabase_roles_${userId}`;
+    // ログイン情報と同じ保存場所（アプリに組み込み済み）を使う
+    const store = { get: () => Platform.OS === "web" ? Promise.resolve(null) : SecureStore.getItemAsync(key), set: (v: string) => Platform.OS === "web" ? Promise.resolve() : SecureStore.setItemAsync(key, v) };
     try {
-      const { data, error } = await supabase
+      const { data, error } = await withTimeout(supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", userId);
-      if (error) throw error;
-      return data.map((r) => r.role as AppRole);
+        .eq("user_id", userId));
+      if (error || !data) throw error ?? new Error("ロールを取得できませんでした");
+      const fresh = data.map((r: { role: string }) => r.role as AppRole);
+      await store.set(JSON.stringify(fresh)).catch(() => {});
+      return fresh;
     } catch (e) {
-      console.warn("ロールの取得に失敗しました:", e);
-      return [];
+      console.warn("ロールの取得に失敗しました。端末の控えを使います:", e);
+      try { return JSON.parse((await store.get()) ?? "[]") as AppRole[]; } catch { return []; }
     }
   };
 
