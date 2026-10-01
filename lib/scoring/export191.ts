@@ -48,6 +48,18 @@ export function export191Row(st: GameState, page: Page, info: GameExportInfo, pl
   return row;
 }
 export function export191(rows: (string|number)[][]): string { return [COLUMN191_HEADERS.join('\t'),...rows.map(row=>COLUMN191_HEADERS.map((_,i)=>String(row[i]??'')).join('\t'))].join('\n'); }
+// 旧Excelの保存ファイルの1行目（列のまとまりの見出し）。列番号は1始まり
+export const COLUMN191_GROUPS: [number,string][] = [[1,'基礎情報'],[10,'プレイ前の状況'],[18,'プレイ後のゲームの切れ目'],[21,'プレイ前の走者および打者状況'],[30,'空白列（後の追加のため）'],[37,'走者のプレイ（記入事項）'],[58,'出場メンバー（先攻）'],[77,'出場メンバー（後攻）'],[96,'出場メンバー（先攻）'],[116,'出場メンバー（後攻）'],[137,'ランニングスコア　表'],[152,'ランニングスコア　裏'],[167,'PitcherResult'],[175,'守備位置']];
+/** 旧VBA（試合ファイル作成.bas）と同じファイル名：試合記録（季節種別 週-日-第何試合 先攻vs後攻） */
+export function legacyFileName(g:{season?:string;kind?:string;week?:string|number|null;day?:string|number|null;game_number?:string|number|null;away_name?:string;home_name?:string}):string{
+  const v=(x:unknown)=>x==null||x===0||x==='0'?'':String(x);
+  return `試合記録（${v(g.season)}${v(g.kind)}${v(g.week)}-${v(g.day)}-${v(g.game_number)}${v(g.away_name)}vs${v(g.home_name)}）.xlsx`;
+}
+/** 旧Excelと同じ形（1行目にまとまりの見出し、2行目に列名、シート名「試合記録」）の表を作る */
+export function export191Sheet(rows:(string|number)[][]):(string|number|null)[][]{
+  const g=Array<string|null>(191).fill(null);for(const [c,t] of COLUMN191_GROUPS)g[c-1]=t;
+  return [g,[...COLUMN191_HEADERS],...rows.map(r=>Array.from({length:191},(_,i)=>r[i]??''))];
+}
 export function export191Csv(rows:(string|number)[][]):string {
   const cell=(value:unknown)=>{const s=String(value??'');return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s};
   return `\uFEFF${[COLUMN191_HEADERS,...rows].map(row=>Array.from({length:191},(_,i)=>cell(row[i])).join(',')).join('\r\n')}`;

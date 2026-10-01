@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLUMN191_HEADERS, export191Csv, export191Game, export191Row } from './export191';
+import { COLUMN191_HEADERS, export191Csv, export191Game, export191Row, legacyFileName } from './export191';
 import { blank, initState, type Page } from './engine';
 
 const headers = [
@@ -52,5 +52,14 @@ describe('191-column export',()=>{
   it('writes a synthetic row directly from the row exporter',()=>{
     const row=export191Row(initState(),blank(),{...game,pitcherNames:['HP','AP'],catcherNames:['HC','AC'],lineupNames:[Array.from({length:9},(_,i)=>`A${i+1}`),Array.from({length:9},(_,i)=>`H${i+1}`)],lineupPositions:[Array.from({length:9},(_,i)=>String(i+1)),Array.from({length:9},(_,i)=>String(i+1))],hands:[Array(9).fill('右'),Array(9).fill('左')],pitcherHands:['右','左']},1,{result:'ボール'});
     expect(row).toHaveLength(191);expect(row[9]).toBe(1);expect(row[45]).toBe('ボール');
+  });
+});
+
+describe('旧Excelと同じファイル名',()=>{
+  it('リーグ戦は「季節種別 週-日-第何試合 先攻vs後攻」',()=>{
+    expect(legacyFileName({season:'春季',kind:'リーグ戦',week:1,day:1,game_number:1,away_name:'明治国際医療大学',home_name:'佛教大学'})).toBe('試合記録（春季リーグ戦1-1-1明治国際医療大学vs佛教大学）.xlsx');
+  });
+  it('オープン戦で週・日・第何試合が空なら「--」',()=>{
+    expect(legacyFileName({season:'春季',kind:'オープン戦',week:'',day:'',game_number:null,away_name:'滋賀大学',home_name:'愛知学院大学'})).toBe('試合記録（春季オープン戦--滋賀大学vs愛知学院大学）.xlsx');
   });
 });

@@ -6,7 +6,8 @@ export type CreateGameDraft = {
 
 export function validateCreateGame(d: CreateGameDraft) {
   const missing: string[] = [];
-  for (const [label, value] of Object.entries({ 試合番号:d.displayNo, 日付:d.date, 時刻:d.time, 球場:d.stadium, 天気:d.weather, 入力方法:d.method, 季節:d.season, 種別:d.kind, 週:d.week, 日:d.day, 第何試合:d.gameNumber })) if (!String(value ?? "").trim()) missing.push(label);
+  // 週・日・第何試合はリーグ戦だけ必須（旧Excelもオープン戦などは空で、ファイル名が「--」になる）
+  for (const [label, value] of Object.entries({ 試合番号:d.displayNo, 日付:d.date, 時刻:d.time, 球場:d.stadium, 天気:d.weather, 入力方法:d.method, 季節:d.season, 種別:d.kind, ...(d.kind==='リーグ戦'?{ 週:d.week, 日:d.day, 第何試合:d.gameNumber }:{}) })) if (!String(value ?? "").trim()) missing.push(label);
   const seen = new Set<string>();
   for (const team of d.teams) {
     // 1〜9行目が打順、10行目（あれば）は投手の行
