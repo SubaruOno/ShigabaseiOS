@@ -65,7 +65,9 @@ const playerRoster=[...roster,...localPlayers].filter((x,i,all)=>x.team_id===tea
  const tell=(t:string)=>{setToast(t);setTimeout(()=>setToast(""),2400)};const stamp=(p:Page)=>{if(!p.time)p.time=new Date().toTimeString().slice(0,8)};
  // ファウルも打球として位置・質・強さを入れる（旧Excelもファウルに打球タイプと位置がある）
 const inPlay=!!currentPage.res&&(typeof currentPage.res.kind==="number"||["out","sac","sf","e","fc","FO"].includes(String(currentPage.res.kind)))&&!(["死球","振り逃げ","守備妨害"].includes(currentPage.res.label));
- const hands=()=>{const ph=currentPage.handP??state.lu[1-state.half].throws;let bh=currentPage.handB??state.lu[state.half].bats[state.bi[state.half]];if(bh==="両")bh=ph==="右"?"左":"右";return{ph,bh}};const {ph,bh}=hands();
+ // 両打ちの打席の左右は、同じ打席の途中なら前の球の選択を引き継ぐ
+const prevPage=focusPage>0?pages[focusPage-1]:undefined;const prevState=useMemo(()=>focusPage>0?stateAt(focusPage-1,pages,setups,true):null,[pages,focusPage,setups]);const samePA=!!prevState&&prevState.half===state.half&&prevState.inn===state.inn&&prevState.bi[state.half]===state.bi[state.half];
+const hands=()=>{const ph=currentPage.handP??state.lu[1-state.half].throws;let bh=currentPage.handB??(samePA?prevPage?.handB:undefined)??state.lu[state.half].bats[state.bi[state.half]];if(bh==="両")bh=ph==="右"?"左":"右";return{ph,bh}};const {ph,bh}=hands();
  const saveNow=async(next:Page[])=>{if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null}setPages(next);const old=await localStore.plays(id);const all=next.slice(0,-1).map((page,i)=>({seq:i+1,page:clone(page),client_mutation_id:isUuid(old[i]?.client_mutation_id)?old[i].client_mutation_id:playMutationId(id,i+1),created_at:old[i]?.created_at??new Date().toISOString()} as LocalPlay));await localStore.savePlays(id,all);await localStore.saveDraft(id,clone(next[next.length-1]))};
  const openConfirm=(text:string,ok:()=>void,label="OK")=>{setModalText(text);setModalOk(()=>ok);setModal(label==="inning"?"inning":"confirm")};
  const chooseResult=(label:string,kind:string|number)=>{// 結果を変えると手で入れた走者の動き（盗塁以外）は消える（BASSと同じ）。黙って消さず知らせる
@@ -78,7 +80,9 @@ if(hadRes)for(const k of Object.keys(p.ra))if(!(p.ra[+k] as ScoringMove|undefine
 // 本塁打などで自動で本塁に来た走者がいれば、BASSと同じく「アウト・得点・打点」をすぐ選べるようにする
 {const np:any={...currentPage,res:{label,kind},ra:currentPage.res?Object.fromEntries(Object.entries(currentPage.ra).filter(([,m]:any)=>m?.steal)):currentPage.ra};if(Object.values(moves(state,np)).some((a:any)=>a?.to>=4&&!a?.out))setHomeOpen(true)}};
  const commit=async()=>{// 入力中のキーボード（メモの変換中の文字など）を閉じてから確定する
-Keyboard.dismiss();const p=pages[focusPage]??blank(),st=stateAt(focusPage,pages,setups,true),msg=checkCommit(st,p);if(msg){tell(msg);return}const after=clone(st);applyPage(after,p);if(after.half!==st.half){setModal("inning");setModalText("イニングの確認");setModalOk(()=>async()=>{const next=[...pages];while(next.length<=focusPage)next.push(blank());await saveNow([...next,blank()]);setFocusPage(next.length);setModal(null);if(st.subHalf[st.half].length)openSubs()});return}const next=[...pages];while(next.length<=focusPage)next.push(blank());next.push(blank());await saveNow(next);setFocusPage(focusPage+1);setPickMode(false);setHomeOpen(false);setRunnerSel(null)};
+Keyboard.dismiss();
+// その球で使った打席・投手の左右を必ず残す（両打ちでも191列は右か左）
+const p=pages[focusPage]??blank();{const h=hands();p.handB=p.handB??h.bh;p.handP=p.handP??h.ph}const st=stateAt(focusPage,pages,setups,true),msg=checkCommit(st,p);if(msg){tell(msg);return}const after=clone(st);applyPage(after,p);if(after.half!==st.half){setModal("inning");setModalText("イニングの確認");setModalOk(()=>async()=>{const next=[...pages];while(next.length<=focusPage)next.push(blank());await saveNow([...next,blank()]);setFocusPage(next.length);setModal(null);if(st.subHalf[st.half].length)openSubs()});return}const next=[...pages];while(next.length<=focusPage)next.push(blank());next.push(blank());await saveNow(next);setFocusPage(focusPage+1);setPickMode(false);setHomeOpen(false);setRunnerSel(null)};
  const clearPage=()=>{replacePage(focusPage, p=>Object.assign(p,blank()));setPickMode(false);setRunnerSel(null);setHomeOpen(false)};
  const key=(d:string)=>edit(p=>{if(d==="C"){p.ball_speed="";(p as any).speedPre=false;return}if(!p.ball_speed&&(p as any).speedPre!==false)p.ball_speed="1"+d;else if(p.ball_speed.length<3)p.ball_speed+=d;stamp(p)});
  const runnerClick=(b:number)=>{// 牽制モード中は、走者の印を押したらその塁を牽制先にする
@@ -115,7 +119,9 @@ const slot=subSlot===9?"P":subSlot;edit(p=>p.subs.push(slot==="P"?{t:subTeam as 
  const openTB=()=>{const bi=state.bi[state.half],saved=currentPage.tb??{bi,r:[(bi+8)%9,(bi+7)%9,null],b:0,s:0,o:0};setTb(clone(saved));setModal("tb")};
  const saveTB=()=>{edit(p=>p.tb=tb);setModal(null);edit(p=>stamp(p))};
  const saveErrors=()=>{if(!errorTypes.length){setModal(null);return}edit(p=>p.catch_fielder.push({pos:errorPos,err:errorTypes.join("、")}));setModal(null)};
- const undo=async()=>{if(focusPage===pages.length-1&&focusPage>0){const next=pages.slice(0,-2);next.push(blank());await saveNow(next);setFocusPage(next.length-1)}};
+ // 取り消しは押し間違いで記録が消えないよう、何を取り消すかを見せて確認してから行う
+const undo=()=>{if(!(focusPage===pages.length-1&&focusPage>0))return;const last=pages[pages.length-2];const what=last?.res?.label??(last?.pickoff_throw_to?"牽制":last?.skip?"打席スキップ":last?.subs?.length?"選手交代":"記録");
+openConfirm(`直前に確定した「${what}」（ページ${pages.length-1}）を取り消しますか？`,async()=>{const next=pages.slice(0,-2);next.push(blank());await saveNow(next);setFocusPage(next.length-1)})};
  const pageNav=(idx:number)=>{setFocusPage(Math.max(0,Math.min(idx,pages.length-1)));setHomeOpen(false);setRunnerSel(null);setOpenMenu(null)};
  const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{// 入力を保存し、試合を「完了」にして得点を残す（191列の最後の行が「試合終了」になる）
 await saveNow(pages);{const games=await localStore.games();const fin=stateAt(pages.length,pages,setups);await localStore.saveGames(games.map(g=>g.id===id?{...g,status:"completed",score_away:fin.score[0],score_home:fin.score[1],synced_at:undefined}:g))}
