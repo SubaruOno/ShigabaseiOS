@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useFocusEffect } from "expo-router";
 import { useAuth } from "@/hooks/use-auth";
 import { localStore, LocalGame } from "@/lib/scoring/local-store";
 import { syncScoringGame } from "@/lib/scoring/sync-game";
@@ -10,7 +10,10 @@ import * as Sharing from "expo-sharing";
 import { export191Game, export191Sheet, legacyFileName } from "@/lib/scoring/export191";
 import * as XLSX from "xlsx";
 export default function ManageGames(){const {user,isLoading,hasRole}=useAuth();const [games,setGames]=useState<LocalGame[]>([]),[busy,setBusy]=useState<string|null>(null),[errors,setErrors]=useState<Record<string,string>>({});
- const refresh=async()=>{const local=await localStore.games();const {data}=await supabase.from("scoring_games").select("*").order("game_date",{ascending:false}).limit(100);const merged=[...local,...(data??[]).filter((r:any)=>!local.some(g=>g.id===r.id)).map((r:any)=>({...r,lineup:[]} as LocalGame))];setGames(merged);};useEffect(()=>{refresh()},[]);
+ // 端末の試合をすぐ出し、サーバーの試合は届いたら足す（通信が遅い・切れていても一覧が空にならない）
+const refresh=async()=>{const local=await localStore.games();setGames(local);const res:any=await Promise.race([Promise.resolve(supabase.from("scoring_games").select("*").order("game_date",{ascending:false}).limit(100)),new Promise(r=>setTimeout(()=>r({data:null}),5000))]).catch(()=>({data:null}));const data=res?.data;const merged=[...local,...(data??[]).filter((r:any)=>!local.some(g=>g.id===r.id)).map((r:any)=>({...r,lineup:[]} as LocalGame))];setGames(merged);};useEffect(()=>{refresh()},[]);
+ // 画面に戻ってきたときも読み直す
+ useFocusEffect(useCallback(()=>{refresh()},[]));
  if(isLoading)return <View style={s.center}><Text>読み込み中…</Text></View>;if(!user)return <Redirect href="/login"/>;if(!hasRole("analyst")&&!hasRole("admin"))return <Redirect href="/(tabs)"/>;
  const sync=async(g:LocalGame)=>{setBusy(g.id);setErrors(v=>({...v,[g.id]:""}));try{await syncScoringGame(g,user.id,supabase);const next=await localStore.games();setGames(current=>current.map(row=>next.find(x=>x.id===row.id)??row));setErrors(v=>({...v,[g.id]:""}));}catch(error){const message=error instanceof Error?error.message:"原因を確認できませんでした";setErrors(v=>({...v,[g.id]:message}))}finally{setBusy(null)}};
  const exportGame=async(g:LocalGame)=>{setBusy(g.id);setErrors(v=>({...v,[g.id]:""}));try{let lineup=(g.lineup??[]) as any[];if(!lineup.length){const {data,error}=await supabase.from("scoring_lineups").select("*").eq("game_id",g.id);if(error)throw error;lineup=data??[];const ids=lineup.map(r=>r.roster_player_id).filter(Boolean);if(ids.length){const {data:players,error:playerError}=await supabase.from("scoring_roster_players").select("id,name,bat_hand,throw_hand,show_index").in("id",ids);if(playerError)throw playerError;lineup=lineup.map(r=>({...r,player_snapshot:(players??[]).find(p=>p.id===r.roster_player_id)}));}}
