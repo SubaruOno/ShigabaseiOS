@@ -3,8 +3,10 @@ export const LEGACY_COURSE = { imagePixels: 351, pointsPerPixel: 0.75, controlPo
 export const LEGACY_FIELD = { imagePixels: 353, pointsPerPixel: 0.75, controlPoints: 264.75, home: [176, 287] as const, first: [228, 233] as const, second: [176, 182] as const, third: [122, 233] as const } as const;
 
 export type Point = { x: number; y: number };
+/** 旧Excelの座標は小数2桁まで（Windowsは0.75刻み、Macは0.05刻み）。保存も小数2桁にそろえる */
+export const round2 = (v: number): number => Math.round(v * 100) / 100;
 export function fractionsToLegacyPoint(fractionX: number, fractionY: number, controlPoints: number): Point {
-  return { x: fractionX * controlPoints, y: fractionY * controlPoints };
+  return { x: round2(fractionX * controlPoints), y: round2(fractionY * controlPoints) };
 }
 export function legacyCoursePoint(fractionX: number, fractionY: number): Point {
   return fractionsToLegacyPoint(fractionX, fractionY, LEGACY_COURSE.controlPoints);
@@ -13,7 +15,7 @@ export function legacyFieldPoint(fractionX: number, fractionY: number): Point {
   return fractionsToLegacyPoint(fractionX, fractionY, LEGACY_FIELD.controlPoints);
 }
 export function mirrorCoursePoint(point: Point): Point {
-  return { x: LEGACY_COURSE.controlPoints - point.x, y: point.y };
+  return { x: round2(LEGACY_COURSE.controlPoints - point.x), y: point.y };
 }
 
 /** Approximate migration from the former 280x280 BASS-like field SVG (old pages only).

@@ -18,6 +18,7 @@ export function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
   if (label === "守備妨害" || label === "打撃妨害" || label === "走塁妨害") return label;
   // 旧Excelから取り込んだページは、結果の言葉がすでに旧Excelの言葉なのでそのまま使う
   if (label && OLD_RESULT_WORDS.has(label)) return label;
+  if (label === "ｽﾘｰﾊﾞﾝﾄ失敗") return "スリーバント失敗";
   if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? "凡打死";
   if (kind === "S") return page.res?.label === "空振" ? before.s >= 2 ? "空振り三振" : "空振り" : before.s >= 2 ? "見逃し三振" : "見逃し";
   if (kind === "B") return before.b >= 3 ? "四球" : "ボール";
