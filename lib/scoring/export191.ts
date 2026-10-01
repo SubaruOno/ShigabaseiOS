@@ -1,5 +1,6 @@
 import { applyPage, GameState, initState, Page, stateAt, TeamSetup, batterOf, pitcherOf, moves, Hand } from './engine';
 import { convertSavedPageCoordinates } from './coords';
+import { resultWords } from './to-pitches';
 
 // Saved-file order from the 191-column values survey, not the input template order.
 export const COLUMN191_HEADERS = [
@@ -90,7 +91,8 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     const subRow=(item.page as any).rowType==='交代';
     const before=stateAt(index,clean.map(x=>x.page),setup,!subRow);
     const p=convertSavedPageCoordinates(item.page);
-    const result = p.res ? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
+    // 打撃結果は旧Excelの言葉で書く（カウントで決まる「見逃し三振」「四球」なども含め、投球データと同じ変換を使う）
+    const result = p.res ? resultWords(p,before) ?? masters.results?.find(x=>x.id===String(p.res?.kind)||x.name===p.res?.label)?.old_excel_label ?? p.res.label : undefined;
     const pitchType = p.pitch_type ? masters.ballTypes?.find(x=>x.name===p.pitch_type)?.old_excel_label ?? p.pitch_type : undefined;
     const planNames=Object.values(p.plan??{}).filter(Boolean).map(v=>masters.plans?.find(x=>x.id===String(v)||x.name===String(v))?.old_excel_label??String(v));
     const defender=before.lu[1-before.half];
