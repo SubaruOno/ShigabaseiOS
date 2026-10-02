@@ -98,11 +98,13 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   if (linkReadError) throw new Error(`分析用試合を確認できませんでした: ${linkReadError.message}`);
   let analysisGameId = linked?.id;
   if (!analysisGameId) {
-    const {data: legacy} = await supabase.from("games").select("id").eq("date", game.game_date).eq("season",game.season).eq("kind",game.kind).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).maybeSingle();
+    // 旧Excelから取り込んだ試合（まだどの試合記録ともつながっていない行）だけを引き継ぐ。
+    // つながり済みの行まで探すと、同じ日・同じ第何試合の別の試合を上書きしてしまう
+    const {data: legacy} = await supabase.from("games").select("id").is("scoring_game_id", null).eq("date", game.game_date).eq("season",game.season).eq("kind",game.kind).eq("week",Number(game.week)).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).limit(1).maybeSingle();
     analysisGameId = legacy?.id;
   }
   const lineScore = scoreLine({ plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames: [awayName,homeName] });
-  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${game.game_time}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
+  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
   const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
