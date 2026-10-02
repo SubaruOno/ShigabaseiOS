@@ -7,6 +7,8 @@ import { buildRosterPlayers } from "@/lib/scoring/roster";
 
 type Lineup = { team_id: string; slot: number; roster_player_id: string; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; ohtani_rule?: boolean; player_snapshot?: Record<string, any> };
 
+// 日本時間の翌日0時（試合結果の date は時刻付きなので、その日の範囲で探す）
+const nextDayJst = (d: string) => { const t = new Date(`${d}T00:00:00+09:00`); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString(); };
 export async function syncScoringGame(game: LocalGame, userId: string, supabase: SupabaseClient) {
   const plays = await localStore.plays(game.id);
   const deviceId = await localStore.deviceId();
@@ -110,11 +112,11 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   if (!analysisGameId) {
     // 旧Excelから取り込んだ試合（まだどの試合記録ともつながっていない行）だけを引き継ぐ。
     // つながり済みの行まで探すと、同じ日・同じ第何試合の別の試合を上書きしてしまう
-    const {data: legacy} = await supabase.from("games").select("id").is("scoring_game_id", null).eq("date", game.game_date).eq("season",game.season).eq("kind",game.kind).eq("week",Number(game.week)).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).limit(1).maybeSingle();
+    const {data: legacy} = await supabase.from("games").select("id").is("scoring_game_id", null).gte("date", `${game.game_date}T00:00:00+09:00`).lt("date", nextDayJst(game.game_date)).eq("season",game.season).eq("kind",game.kind).eq("week",Number(game.week)).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).limit(1).maybeSingle();
     analysisGameId = legacy?.id;
   }
   const lineScore = scoreLine({ plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames: [awayName,homeName] });
-  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00`, season: game.season, kind: game.kind, week: game.week === "" ? null : Number(game.week), game_number: game.game_number || null, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
+  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00+09:00`, season: game.season, kind: game.kind, week: game.week === "" ? null : Number(game.week), game_number: game.game_number || null, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
   const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
