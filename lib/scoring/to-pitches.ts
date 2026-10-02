@@ -1,5 +1,5 @@
 import { applyPage, initState, stateAt, teamSetupsFromLineup, type Page } from "./engine";
-import { convertSavedPageCoordinates } from "./coords";
+import { convertSavedPageCoordinates, round2 } from "./coords";
 
 type LocalPlay = { seq: number; page: Page };
 type LineupRow = { team_id: string; slot: number; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; player_snapshot?: { name?: string; bat_hand?: string; throw_hand?: string; uniform_no?: string | number; show_index?: number } };
@@ -95,11 +95,12 @@ export function toAnalysisPitches(input: {
       pitcher_name: nameFor(1-offense, pitcherNo), pitcher_hand: before.lu[1-offense].throws,
       catcher_name: nameFor(1-offense, catcherNo), runner_1st: runners[0], runner_2nd: runners[1], runner_3rd: runners[2],
       balls: before.b, strikes: before.s, outs: before.outs, pa_complete: paState(p, before, after),
-      pitch_count: before.pcount[(1 - before.half) * 1000 + pitcherNo] ?? 0, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
-      course_x: p.course?.[0] ?? null, course_y: p.course?.[1] ?? null,
+      pitch_count: (before.pcount[(1 - before.half) * 1000 + pitcherNo] ?? 0) + 1, pitch_type: ballName(p.pitch_type), pitch_speed: num(p.ball_speed),
+      // 座標は旧Excel・本番と同じく小数2桁
+      course_x: p.course ? round2(p.course[0]) : null, course_y: p.course ? round2(p.course[1]) : null,
       batting_result: resultWords(p, before), batting_result2: result2, hit_type: hitType, hit_strength: hitStrength,
       // The scoring UI records absolute SVG field coordinates (home plate near x=46,y=238, outward/upward); legacy imports and spray-chart rendering use these same coordinates.
-      hit_x: p.batted_ball?.x ?? null, hit_y: p.batted_ball?.y ?? null,
+      hit_x: p.batted_ball ? round2(p.batted_ball.x) : null, hit_y: p.batted_ball ? round2(p.batted_ball.y) : null,
       strategy: planValues[0] ?? null, strategy2: planValues[1] ?? null, strategy_result: null,
       // 本番の試合結果と同じく「守備位置＋エラーの種類」（例：6ファンブル）
       error_type: (() => { const e = (p.catch_fielder ?? []).filter((c: any) => typeof c === "object" && c?.err) as { pos: number; err: string }[]; return e.length ? e.map(x => `${x.pos}${String(x.err).split(/[、,]/)[0]}`).join("") : null; })(),
@@ -112,11 +113,10 @@ export function scoreLine(input: { plays: LocalPlay[]; lineup: LineupRow[]; team
   const setups = teamSetupsFromLineup(input.lineup as any, input.teamIds, input.teamNames);
   const state = initState(setups);
   for (const { page } of input.plays) {
-    if (!page.res && !page.pickoff_throw_to && !(page.skip && !!(page.ra[0]?.out || page.ra[0]?.to))) continue;
     applyPage(state, page);
   }
   // 実際にプレイがあった回まで（最後のアウトのあと次の回へ進んだ分は数えない）
-  const inningCount = Math.max(state.line[0].length, state.line[1].length);
+  const inningCount = Math.max(9, state.line[0].length, state.line[1].length);
   const fillInnings = (line: number[]) => Array.from({ length: inningCount }, (_, inning) => line[inning] ?? 0);
   return { awayScore: state.score[0], homeScore: state.score[1], awayRunsPerInning: fillInnings(state.line[0]), homeRunsPerInning: fillInnings(state.line[1]) };
 }

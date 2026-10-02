@@ -24,7 +24,7 @@ describe("scoring pages to analysis pitch rows",()=>{
   });
   it("maps batted-ball feature and strength and preserves field coordinates",()=>{
     const result=rows([page("out","凡打",{coords_version:undefined,feature:3,rank:"A",batted_ball:{x:109,y:72}})])[0];
-    expect([result.hit_type,result.hit_strength,result.hit_x,result.hit_y]).toEqual(["ライナー","A",oldFieldPointFromBASS({x:109,y:72}).x,oldFieldPointFromBASS({x:109,y:72}).y]);
+    expect([result.hit_type,result.hit_strength,result.hit_x,result.hit_y]).toEqual(["ライナー","A",Math.round(oldFieldPointFromBASS({x:109,y:72}).x*100)/100,Math.round(oldFieldPointFromBASS({x:109,y:72}).y*100)/100] /* 本番と同じく小数2桁 */);
     expect(rows([page("out","凡打",{feature:1,rank:"2"})])[0].hit_strength).toBe("B");
   });
   it("preserves explicitly legacy coordinates without a second conversion",()=>{const point={x:109,y:72};const p=page("out","凡打",{coords_version:"legacy-excel-v1",batted_ball:point});const result=rows([p])[0];expect([result.hit_x,result.hit_y]).toEqual([point.x,point.y]);});
@@ -35,7 +35,7 @@ describe("scoring pages to analysis pitch rows",()=>{
   it("calculates line score through the last committed page, excluding blank pages",()=>{
     const scored=page(1,"単打",{ra:{0:{to:4}}});
     const line=scoreLine({plays:[{seq:1,page:scored},{seq:2,page:page()}],lineup,teamIds:["away","home"],teamNames:["先攻","後攻"]});
-    expect(line).toEqual({awayScore:1,homeScore:0,awayRunsPerInning:[1],homeRunsPerInning:[0]});
+    expect(line).toEqual({awayScore:1,homeScore:0,awayRunsPerInning:[1,0,0,0,0,0,0,0,0],homeRunsPerInning:[0,0,0,0,0,0,0,0,0]}); // 本番と同じく最低9回分
   });
 });
 
@@ -68,5 +68,12 @@ describe("本番の試合結果と同じ言葉で書く", () => {
   });
   it("エラーの種類は守備位置＋種類（例：6ファンブル）", () => {
     expect(rows([page("e", "失策出塁", { catch_fielder: [{ pos: 6, err: "ファンブル" }] as any })])[0].error_type).toBe("6ファンブル");
+  });
+});
+
+describe("球数は旧Excel・本番と同じく、その球を含めた数", () => {
+  it("1球目は1、2球目は2", () => {
+    const r = rows([page("B", "ボール"), page("S", "見送")]);
+    expect(r.map(x => x.pitch_count)).toEqual([1, 2]);
   });
 });
