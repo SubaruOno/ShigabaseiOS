@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Redirect, router, useFocusEffect } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { withTimeout } from "@/lib/scoring/net";
@@ -32,6 +32,7 @@ export default function ScoringMasters() {
   const [teamFilter, setTeamFilter] = useState("");
   const [search, setSearch] = useState("");
   const [includeRetired, setIncludeRetired] = useState(false);
+  const [teamPicker, setTeamPicker] = useState(false);
   const [includeDisabled, setIncludeDisabled] = useState(false);
   const [loading, setLoading] = useState(true);
   // マスターはサーバーが正。電波がないときに編集すると端末どうしで食い違うので、つながっているときだけ編集できるようにする
@@ -41,7 +42,7 @@ export default function ScoringMasters() {
     setLoading(true);
     const [{ data }, { data: teamData }, {data: categoryData}, {data: stadiumData}, {data: positionData}, {data: careerData}] = await Promise.all([
       withTimeout(supabase.from(tables[kind]).select("*").limit(1000)) as any,
-      withTimeout(supabase.from("opponent_teams").select("id,name").order("name")) as any,
+      withTimeout(supabase.from("opponent_teams").select("id,name").order("display_order", { nullsFirst: false }).order("name")) as any,
       withTimeout(supabase.from("scoring_categories").select("id,name")) as any,
       withTimeout(supabase.from("scoring_stadiums").select("id,name")) as any,
       withTimeout(supabase.from("scoring_positions").select("id,name")) as any,
@@ -88,7 +89,7 @@ export default function ScoringMasters() {
       <View style={s.toggle}><Text>無効を含める</Text><Switch value={includeDisabled} onValueChange={setIncludeDisabled} /></View>
     </View>
     {kind === "選手" && <View style={s.filters}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}><TouchableOpacity style={[s.tab, !teamFilter && s.active]} onPress={() => setTeamFilter("")}><Text style={!teamFilter ? s.activeText : s.tabText}>全チーム</Text></TouchableOpacity>{teams.map(team => <TouchableOpacity key={team.id} style={[s.tab, teamFilter === str(team.id) && s.active]} onPress={() => setTeamFilter(str(team.id))}><Text style={teamFilter === str(team.id) ? s.activeText : s.tabText}>{team.name}</Text></TouchableOpacity>)}</ScrollView>
+      <TouchableOpacity style={s.teamSelect} onPress={() => setTeamPicker(true)}><Text style={s.teamSelectText}>{teams.find(t => str(t.id) === teamFilter)?.name ?? "全チーム"}　⌄</Text></TouchableOpacity>
       <View style={s.toggle}><Text>引退選手を含める</Text><Switch value={includeRetired} onValueChange={setIncludeRetired} /></View>
       <TextInput style={s.search} value={search} onChangeText={setSearch} placeholder="選手名・略称で検索" />
     </View>}
@@ -105,9 +106,18 @@ export default function ScoringMasters() {
       })}
     </View></ScrollView>
     {!loading && displayRows.length === 0 && <Text style={s.empty}>該当するデータはありません。</Text>}
+      <Modal visible={teamPicker} transparent animationType="fade" onRequestClose={() => setTeamPicker(false)}><View style={s.scrim}><View style={s.dialog}><Text style={s.dialogTitle}>チーム</Text><ScrollView>{[{ id: "", name: "全チーム" }, ...teams].map(team => <TouchableOpacity key={str(team.id) || "all"} style={[s.pickRow, teamFilter === str(team.id) && s.pickRowActive]} onPress={() => { setTeamFilter(str(team.id)); setTeamPicker(false); }}><Text>{team.name}</Text></TouchableOpacity>)}</ScrollView><TouchableOpacity style={s.closeBtn} onPress={() => setTeamPicker(false)}><Text>閉じる</Text></TouchableOpacity></View></View></Modal>
   </ScrollView>;
 }
 
 const s = StyleSheet.create({
+  teamSelect: { alignSelf: "flex-start", minWidth: 260, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, backgroundColor: "white" },
+  teamSelectText: { fontSize: 16 },
+  scrim: { flex: 1, backgroundColor: "rgba(0,0,0,.45)", justifyContent: "center", alignItems: "center", padding: 20 },
+  dialog: { width: 420, maxWidth: "96%", maxHeight: "85%", backgroundColor: "white", padding: 18, borderRadius: 10, gap: 8 },
+  dialogTitle: { fontSize: 18, fontWeight: "700" },
+  pickRow: { padding: 12, borderBottomWidth: 1, borderColor: "#eee" },
+  pickRowActive: { backgroundColor: "#dbe4ed" },
+  closeBtn: { padding: 10, borderWidth: 1, borderColor: "#0a7ea4", borderRadius: 7, alignSelf: "flex-start" },
   offline: { padding: 12, borderRadius: 8, backgroundColor: "#fff4e6", borderWidth: 1, borderColor: "#ffa94d" },
   offlineText: { color: "#d9480f", fontWeight: "600" }, page: { flex: 1, backgroundColor: "#f4f6f8" }, wrap: { padding: 16, gap: 12, maxWidth: 1200, width: "100%", alignSelf: "center" }, center: { flex: 1, alignItems: "center", justifyContent: "center" }, tabs: { flexDirection: "row", gap: 7, alignItems: "center" }, tab: { paddingHorizontal: 13, paddingVertical: 10, borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, backgroundColor: "white" }, active: { backgroundColor: "#0a7ea4", borderColor: "#0a7ea4" }, tabText: { color: "#243b53" }, activeText: { color: "white", fontWeight: "700" }, toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, add: { backgroundColor: "#0a7ea4", paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 }, addText: { color: "white", fontWeight: "700" }, toggle: { flexDirection: "row", alignItems: "center", gap: 8 }, filters: { gap: 10 }, search: { backgroundColor: "white", borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, padding: 11 }, count: { color: "#65788a" }, tableRow: { flexDirection: "row", minHeight: 46, alignItems: "center", backgroundColor: "white", borderBottomWidth: 1, borderColor: "#e1e6eb" }, headRow: { backgroundColor: "#e9eef2" }, altRow: { backgroundColor: "#fbfcfd" }, disabledRow: { backgroundColor: "#e3e5e7", opacity: 0.62 }, cell: { width: 120, paddingHorizontal: 10, paddingVertical: 12, color: "#243b53" }, editCell: { width: 76 }, editText: { color: "#0a7ea4", fontWeight: "700" }, empty: { textAlign: "center", color: "#65788a", padding: 20 } });
