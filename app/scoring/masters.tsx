@@ -8,7 +8,7 @@ const tabs = ["チーム", "選手", "球場", "カテゴリ", "球種", "結果
 type Kind = (typeof tabs)[number];
 const tables: Record<Kind, string> = { チーム: "opponent_teams", 選手: "scoring_roster_players", 球場: "scoring_stadiums", カテゴリ: "scoring_categories", 球種: "scoring_ball_types", 結果: "scoring_results", 作戦: "scoring_plans", メモ: "scoring_memos" };
 const columns: Record<Kind, [string, string][]> = {
-  チーム: [["name", "名前"], ["name_s", "略称"], ["name_e", "英語名"], ["category_id", "カテゴリ"], ["stadium_id", "本拠地"], ["mark", "マーク"], ["display_order", "表示順"]],
+  チーム: [["name", "名前"], ["name_s", "略称"], ["category_id", "カテゴリ"], ["display_order", "表示順"]],
   選手: [["team_id", "チーム"], ["uniform_no", "背番号"], ["name", "名前"], ["throw_hand", "投"], ["bat_hand", "打"], ["primary_position_id", "守備"], ["retired", "引退"]],
   球場: [["name", "名前"], ["name_s", "略称"], ["name_e", "英語名"], ["left_distance", "左翼"], ["center_distance", "中堅"], ["right_distance", "右翼"]],
   カテゴリ: [["name", "名前"], ["name_s", "略称"], ["name_e", "英語名"], ["kind", "種別"], ["show_index", "表示順"]],
