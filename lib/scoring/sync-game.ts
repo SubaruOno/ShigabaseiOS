@@ -57,6 +57,8 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   }
   const { error: playError } = await supabase.from("scoring_plays").upsert(plays.map(p => ({ game_id: game.id, seq: p.seq, input_event: p.page, page_state: {}, client_mutation_id: isUuid(p.client_mutation_id) ? p.client_mutation_id : playMutationId(game.id, p.seq), device_id: deviceId })), { onConflict: "game_id,client_mutation_id" });
   if (playError) throw new Error(`プレイを同期できませんでした: ${playError.message}`);
+  // 取り消しで端末のページが減った分は、サーバーからも消す
+  { const { error } = await supabase.from("scoring_plays").delete().eq("game_id", game.id).gt("seq", plays.length); if (error) throw new Error(`取り消したプレイを消せませんでした: ${error.message}`); }
 
   // ローカルのページに記録された選手交代を正規化して同期する。
   const substitutions: any[] = [];
