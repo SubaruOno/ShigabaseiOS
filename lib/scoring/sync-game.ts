@@ -118,6 +118,8 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
   const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
+  // 権限が足りないと削除はエラーにならず0件で終わる。残っていたら止めて、投球が2重に入るのを防ぐ
+  {const {count:left}=await supabase.from("pitches").select("id",{count:"exact",head:true}).eq("game_id",analysisGameId);if(left)throw new Error("試合結果の投球を入れ替える権限がありません。アナリストか管理者のアカウントで同期してください");}
   const teamNames: [string,string] = [awayName,homeName];
   const planNames = Object.fromEntries((plans ?? []).map(p => [String(p.id), p.old_excel_label || p.name]));
   const positionNames = Object.fromEntries((positions ?? []).map(p => [String(p.id), p.name]));

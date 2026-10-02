@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // DB webhook から呼ばれる Edge Function
-// documents / videos テーブルへの INSERT 時に全ユーザーへプッシュ通知を送信する
+// documents / videos テーブルへの INSERT 時は全ユーザー、games テーブルへの INSERT 時はアナリストだけにプッシュ通知を送信する
 Deno.serve(async (req) => {
   try {
     const supabase = createClient(
@@ -51,10 +51,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 全ユーザーの push token を取得
-    const { data: tokens } = await supabase
-      .from("push_tokens")
-      .select("token");
+    // 試合データ（games）はアナリストだけに知らせる。資料・動画はこれまでどおり全ユーザー
+    let tokens: { token: string }[] | null = null;
+    if (table === "games") {
+      const { data: analysts } = await supabase.from("user_roles").select("user_id").eq("role", "analyst");
+      const ids = [...new Set((analysts ?? []).map((r: { user_id: string }) => r.user_id))];
+      tokens = ids.length ? (await supabase.from("push_tokens").select("token").in("user_id", ids)).data : [];
+    } else {
+      tokens = (await supabase.from("push_tokens").select("token")).data;
+    }
 
     if (!tokens || tokens.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), {
