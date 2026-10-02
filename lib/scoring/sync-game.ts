@@ -132,6 +132,6 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   // 権限が足りないと削除はエラーにならず0件で終わる。残っていたら止めて、投球が2重のままにしない
   if(oldIds.length){const {count:left}=await supabase.from("pitches").select("id",{count:"exact",head:true}).in("id",oldIds.slice(0,200));if(left)throw new Error("試合結果の投球を入れ替える権限がありません。アナリストか管理者のアカウントで同期してください");}
   const all = await localStore.games();
-  await localStore.saveGames(all.map(g => g.id === game.id ? { ...g, synced_at: new Date().toISOString() } : g));
+  await localStore.saveGames(all.map(g => g.id === game.id ? { ...g, synced_at: new Date().toISOString(), ever_synced: true } : g));
 }
 function uuid() { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }); }
