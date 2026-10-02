@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { Redirect, router, useFocusEffect } from "expo-router";
-import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { withTimeout } from "@/lib/scoring/net";
 
 const tabs = ["チーム", "選手", "球場", "カテゴリ", "球種", "結果", "作戦", "メモ"] as const;
 type Kind = (typeof tabs)[number];
@@ -33,17 +34,20 @@ export default function ScoringMasters() {
   const [includeRetired, setIncludeRetired] = useState(false);
   const [includeDisabled, setIncludeDisabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  // マスターはサーバーが正。電波がないときに編集すると端末どうしで食い違うので、つながっているときだけ編集できるようにする
+  const [offline, setOffline] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const [{ data }, { data: teamData }, {data: categoryData}, {data: stadiumData}, {data: positionData}, {data: careerData}] = await Promise.all([
-      supabase.from(tables[kind]).select("*").limit(1000),
-      supabase.from("opponent_teams").select("id,name").order("name"),
-      supabase.from("scoring_categories").select("id,name"),
-      supabase.from("scoring_stadiums").select("id,name"),
-      supabase.from("scoring_positions").select("id,name"),
-      supabase.from("scoring_player_careers").select("roster_player_id,team_id,uniform_no,start_date,end_date").is("end_date", null),
+      withTimeout(supabase.from(tables[kind]).select("*").limit(1000)) as any,
+      withTimeout(supabase.from("opponent_teams").select("id,name").order("name")) as any,
+      withTimeout(supabase.from("scoring_categories").select("id,name")) as any,
+      withTimeout(supabase.from("scoring_stadiums").select("id,name")) as any,
+      withTimeout(supabase.from("scoring_positions").select("id,name")) as any,
+      withTimeout(supabase.from("scoring_player_careers").select("roster_player_id,team_id,uniform_no,start_date,end_date").is("end_date", null)) as any,
     ]);
+    setOffline(!data);
     setRows(data ?? []);
     setTeams(teamData ?? []);
     setCategories(categoryData ?? []); setStadiums(stadiumData ?? []); setPositions(positionData ?? []); setCareers(careerData ?? []);
@@ -70,7 +74,7 @@ export default function ScoringMasters() {
     if (field === "primary_position_id") return ({"1":"投","2":"捕","3":"一","4":"二","5":"三","6":"遊","7":"左","8":"中","9":"右","10":"DH"} as Record<string,string>)[str(row[field])] ?? str(value);
     return str(value);
   };
-  const openForm = (id?: string) => router.push((`/scoring/master?kind=${encodeURIComponent(kind)}${id ? `&id=${encodeURIComponent(id)}` : ""}`) as any);
+  const openForm = (id?: string) => offline ? Alert.alert("ネットにつながっていません", "マスターの追加・編集は、ネットにつながっているときにしてください") : router.push((`/scoring/master?kind=${encodeURIComponent(kind)}${id ? `&id=${encodeURIComponent(id)}` : ""}`) as any);
 
   if (isLoading) return <View style={s.center}><Text>読み込み中…</Text></View>;
   if (!user) return <Redirect href="/login" />;
@@ -78,6 +82,7 @@ export default function ScoringMasters() {
 
   return <ScrollView style={s.page} contentContainerStyle={s.wrap}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>{tabs.map(tab => <TouchableOpacity key={tab} onPress={() => { setKind(tab); setSearch(""); setTeamFilter(""); }} style={[s.tab, kind === tab && s.active]}><Text style={kind === tab ? s.activeText : s.tabText}>{tab}</Text></TouchableOpacity>)}</ScrollView>
+    {offline && <View style={s.offline}><Text style={s.offlineText}>ネットにつながっていないため、マスターを読み込めません。追加・編集は、ネットにつながっているときにしてください。</Text></View>}
     <View style={s.toolbar}>
       <TouchableOpacity style={s.add} onPress={() => openForm()}><Text style={s.addText}>＋ 追加</Text></TouchableOpacity>
       <View style={s.toggle}><Text>無効を含める</Text><Switch value={includeDisabled} onValueChange={setIncludeDisabled} /></View>
@@ -103,4 +108,6 @@ export default function ScoringMasters() {
   </ScrollView>;
 }
 
-const s = StyleSheet.create({ page: { flex: 1, backgroundColor: "#f4f6f8" }, wrap: { padding: 16, gap: 12, maxWidth: 1200, width: "100%", alignSelf: "center" }, center: { flex: 1, alignItems: "center", justifyContent: "center" }, tabs: { flexDirection: "row", gap: 7, alignItems: "center" }, tab: { paddingHorizontal: 13, paddingVertical: 10, borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, backgroundColor: "white" }, active: { backgroundColor: "#0a7ea4", borderColor: "#0a7ea4" }, tabText: { color: "#243b53" }, activeText: { color: "white", fontWeight: "700" }, toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, add: { backgroundColor: "#0a7ea4", paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 }, addText: { color: "white", fontWeight: "700" }, toggle: { flexDirection: "row", alignItems: "center", gap: 8 }, filters: { gap: 10 }, search: { backgroundColor: "white", borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, padding: 11 }, count: { color: "#65788a" }, tableRow: { flexDirection: "row", minHeight: 46, alignItems: "center", backgroundColor: "white", borderBottomWidth: 1, borderColor: "#e1e6eb" }, headRow: { backgroundColor: "#e9eef2" }, altRow: { backgroundColor: "#fbfcfd" }, disabledRow: { backgroundColor: "#e3e5e7", opacity: 0.62 }, cell: { width: 120, paddingHorizontal: 10, paddingVertical: 12, color: "#243b53" }, editCell: { width: 76 }, editText: { color: "#0a7ea4", fontWeight: "700" }, empty: { textAlign: "center", color: "#65788a", padding: 20 } });
+const s = StyleSheet.create({
+  offline: { padding: 12, borderRadius: 8, backgroundColor: "#fff4e6", borderWidth: 1, borderColor: "#ffa94d" },
+  offlineText: { color: "#d9480f", fontWeight: "600" }, page: { flex: 1, backgroundColor: "#f4f6f8" }, wrap: { padding: 16, gap: 12, maxWidth: 1200, width: "100%", alignSelf: "center" }, center: { flex: 1, alignItems: "center", justifyContent: "center" }, tabs: { flexDirection: "row", gap: 7, alignItems: "center" }, tab: { paddingHorizontal: 13, paddingVertical: 10, borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, backgroundColor: "white" }, active: { backgroundColor: "#0a7ea4", borderColor: "#0a7ea4" }, tabText: { color: "#243b53" }, activeText: { color: "white", fontWeight: "700" }, toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, add: { backgroundColor: "#0a7ea4", paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 }, addText: { color: "white", fontWeight: "700" }, toggle: { flexDirection: "row", alignItems: "center", gap: 8 }, filters: { gap: 10 }, search: { backgroundColor: "white", borderWidth: 1, borderColor: "#ccd5de", borderRadius: 8, padding: 11 }, count: { color: "#65788a" }, tableRow: { flexDirection: "row", minHeight: 46, alignItems: "center", backgroundColor: "white", borderBottomWidth: 1, borderColor: "#e1e6eb" }, headRow: { backgroundColor: "#e9eef2" }, altRow: { backgroundColor: "#fbfcfd" }, disabledRow: { backgroundColor: "#e3e5e7", opacity: 0.62 }, cell: { width: 120, paddingHorizontal: 10, paddingVertical: 12, color: "#243b53" }, editCell: { width: 76 }, editText: { color: "#0a7ea4", fontWeight: "700" }, empty: { textAlign: "center", color: "#65788a", padding: 20 } });
