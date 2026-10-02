@@ -51,14 +51,21 @@ export function toAnalysisPitches(input: {
   umpire?: string | null; ballTypes?: Array<{ name: string; old_excel_label?: string | null }>;
   planNames?: Record<string, string>; resultNames?: Record<string, string>; substitutions?: Array<Record<string, unknown>>;
   positionNames?: Record<string, string>;
+  /** 先発にいない選手（代打・代走・継投）の名前を引くための名簿 */
+  players?: Array<{ team_id: string; name: string; uniform_no?: unknown; show_index?: unknown }>;
 }): AnalysisPitch[] {
   const { lineup, teamIds, teamNames } = input;
-  const plays = input.plays.filter(({ page }) => !!page.res || !!page.pickoff_throw_to || (page.skip && !!(page.ra[0]?.out || page.ra[0]?.to)));
+  // 状況（打順・塁・交代）は交代だけのページも含めた全ページから計算し、行にするのは投球・牽制・打席スキップのページだけ
+  const allPages = input.plays.map(p => p.page);
+  const playable = (page: any) => !!page.res || !!page.pickoff_throw_to || (page.skip && !!(page.ra[0]?.out || page.ra[0]?.to));
+  const plays = input.plays.map((play, at) => ({ ...play, at })).filter(({ page }) => playable(page));
   const setups = teamSetupsFromLineup(lineup as any, teamIds, teamNames);
   const nameFor = (team: number, no: number | null) => {
     if (no == null) return null;
     const row = lineup.find(x => x.team_id === teamIds[team] && Number(x.uniform_no ?? x.player_snapshot?.uniform_no ?? x.player_snapshot?.show_index) === no);
-    return row?.player_snapshot?.name ?? String(no);
+    if (row?.player_snapshot?.name) return row.player_snapshot.name;
+    const p = input.players?.find(x => x.team_id === teamIds[team] && Number(x.uniform_no ?? x.show_index) === no);
+    return p?.name ?? String(no);
   };
   const ballName = (value: string | null) => {
     if (!value) return null;
@@ -66,8 +73,8 @@ export function toAnalysisPitches(input: {
     return found?.old_excel_label || value;
   };
   return plays.map((play, index) => {
-    const before = stateAt(index, plays.map(p => p.page), setups, true);
-    const after = stateAt(index + 1, plays.map(p => p.page), setups);
+    const before = stateAt(play.at, allPages, setups, true);
+    const after = stateAt(play.at + 1, allPages, setups);
     const p = convertSavedPageCoordinates(play.page);
     const offense = before.half;
     const batterNo = before.lu[offense].order[before.bi[offense]];

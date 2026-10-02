@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalGame, localStore } from "@/lib/scoring/local-store";
 import { scoreLine, toAnalysisPitches } from "@/lib/scoring/to-pitches";
 import { stateAt, teamSetupsFromLineup } from "@/lib/scoring/engine";
+import { buildRosterPlayers } from "@/lib/scoring/roster";
 
 type Lineup = { team_id: string; slot: number; roster_player_id: string; position_id: number; batting_hand?: string | null; throwing_hand?: string | null; uniform_no?: string | null; ohtani_rule?: boolean; player_snapshot?: Record<string, any> };
 
@@ -49,7 +50,7 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   const lineup = ((game.lineup ?? []) as Lineup[]).map(remapPlayer);
 
   const { error: gameError } = await supabase.from("scoring_games").upsert({ id: game.id, display_game_number: game.display_game_number, game_date: game.game_date, game_time: game.game_time, stadium_id: game.stadium_id ?? null, weather_id: game.weather_id ?? null, method: game.method, home_team_id: game.home_team_id, away_team_id: game.away_team_id, season: game.season, kind: game.kind, week: game.week, day: game.day, game_number: game.game_number, umpire: game.umpire ?? null, tags: game.tags, status: game.status, created_by: userId }, { onConflict: "id" });
-  if (gameError) throw new Error(gameError.code === "23505" && /season_kind_week_day_game_number/.test(gameError.message) ? `${game.season}${game.kind} ${game.week}週-${game.day}日-第${game.game_number}試合 は別の試合としてすでに同期されています。試合の週・日・第何試合を確認してください` : `試合情報を同期できませんでした: ${gameError.message}`);
+  if (gameError) throw new Error(gameError.code === "23505" && /season_kind_week_day_game_number|scoring_games_league_key/.test(gameError.message) ? `${game.season}${game.kind} ${game.week}週-${game.day}日-第${game.game_number}試合 は別の試合としてすでに同期されています。試合の週・日・第何試合を確認してください` : `試合情報を同期できませんでした: ${gameError.message}`);
   if (lineup.length) {
     const { error } = await supabase.from("scoring_lineups").upsert(lineup.map(row => ({ game_id: game.id, ...row })), { onConflict: "game_id,team_id,slot" });
     if (error) throw new Error(`先発メンバーを同期できませんでした: ${error.message}`);
@@ -92,6 +93,13 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
     supabase.from("scoring_positions").select("id,name"),
   ]);
   if (homeError || awayError || ballError) throw new Error(`分析用データのマスターを読み込めませんでした: ${homeError?.message ?? awayError?.message ?? ballError?.message}`);
+  // 代打・代走・継投で出た選手の名前を引くための名簿（両チーム、今の背番号つき）
+  const teamPair = [game.away_team_id, game.home_team_id];
+  const [{ data: rosterRows }, { data: careerRows }] = await Promise.all([
+    supabase.from("scoring_roster_players").select("id,team_id,name,show_index").in("team_id", teamPair),
+    supabase.from("scoring_player_careers").select("roster_player_id,team_id,uniform_no").in("team_id", teamPair).is("end_date", null),
+  ]);
+  const rosterForNames = buildRosterPlayers((rosterRows ?? []) as any[], (careerRows ?? []) as any[]);
   const homeName = home?.name ?? game.home_name ?? "";
   const awayName = away?.name ?? game.away_name ?? "";
   const { data: linked, error: linkReadError } = await supabase.from("games").select("id").eq("scoring_game_id", game.id).maybeSingle();
@@ -104,14 +112,14 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
     analysisGameId = legacy?.id;
   }
   const lineScore = scoreLine({ plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames: [awayName,homeName] });
-  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00`, season: game.season, kind: game.kind, week: Number(game.week), game_number: game.game_number, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
+  const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00`, season: game.season, kind: game.kind, week: game.week === "" ? null : Number(game.week), game_number: game.game_number || null, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
   const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
   const teamNames: [string,string] = [awayName,homeName];
   const planNames = Object.fromEntries((plans ?? []).map(p => [String(p.id), p.old_excel_label || p.name]));
   const positionNames = Object.fromEntries((positions ?? []).map(p => [String(p.id), p.name]));
-  const rows = toAnalysisPitches({ gameId: analysisGameId, plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames, gameDate:game.game_date,gameTime:game.game_time,season:game.season,kind:game.kind,week:game.week,day:game.day,gameNumber:game.game_number,umpire:game.umpire,ballTypes:ballTypes??[],planNames,positionNames });
+  const rows = toAnalysisPitches({ gameId: analysisGameId, players: rosterForNames as any, plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames, gameDate:game.game_date,gameTime:game.game_time,season:game.season,kind:game.kind,week:game.week,day:game.day,gameNumber:game.game_number,umpire:game.umpire,ballTypes:ballTypes??[],planNames,positionNames });
   if(rows.length){const {error}=await supabase.from("pitches").insert(rows);if(error)throw new Error(`分析用投球を保存できませんでした: ${error.message}`);}
   const all = await localStore.games();
   await localStore.saveGames(all.map(g => g.id === game.id ? { ...g, synced_at: new Date().toISOString() } : g));

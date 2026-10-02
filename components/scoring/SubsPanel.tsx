@@ -8,7 +8,7 @@ import type { Hand, Substitution } from "@/lib/scoring/engine";
 // 3. 「保存」でまとめて反映する（入力画面の今のページに交代として残る）
 type Lineup = { order: number[]; pos: number[]; bats: Hand[]; P: number; throws: Hand };
 type Player = { id: string; team_id: string; name: string; uniform_no?: unknown; show_index?: unknown; primary_position_id?: unknown; throw_hand?: unknown; bat_hand?: unknown; retired?: unknown };
-const POSN = ["", "投", "捕", "一", "二", "三", "遊", "左", "中", "右", "DH"];
+const POSN = ["", "投", "捕", "一", "二", "三", "遊", "左", "中", "右", "DH", "代打", "代走"];
 const handJa = (h: unknown): Hand => (h === "L" ? "左" : h === "S" ? "両" : "右");
 const numOf = (p: Player) => Number(p.uniform_no ?? p.show_index);
 const groupOf = (p: Player) => { const n = Number(p.primary_position_id); return n === 1 ? "投手" : n === 2 ? "捕手" : [3, 4, 5, 6, 14].includes(n) ? "内野手" : [7, 8, 9, 15].includes(n) ? "外野手" : "その他"; };
@@ -81,7 +81,7 @@ export function SubsPanel(props: {
   const save = () => {
     if (!subs.length) { props.onCancel(); return; }
     for (const t of [0, 1] as const) {
-      const ps = draft[t].pos.filter(x => x >= 1 && x <= 10); const dup = ps.find((x, i) => ps.indexOf(x) !== i && x !== 10);
+      const ps = draft[t].pos.filter(x => x >= 1 && x <= 9); const dup = ps.find((x, i) => ps.indexOf(x) !== i);
       if (dup) { setError(`${teamNames[t]}：守備「${POSN[dup]}」が重なっています`); return; }
       const nos = draft[t].order; const d2 = nos.find((x, i) => nos.indexOf(x) !== i);
       if (d2 != null) { setError(`${teamNames[t]}：#${d2} が打順に2回入っています`); return; }
@@ -161,7 +161,7 @@ export function SubsPanel(props: {
     </>}
     {posPick && <View style={st.posOverlay}><View style={st.posBox}>
       <Text allowFontScaling={false} style={{ fontWeight: "700", marginBottom: 8 }}>{posPick.slot + 1}番の守備</Text>
-      <View style={st.filters}>{POSN.slice(1).map((n, k) => <TouchableOpacity key={n} onPress={() => setPos(posPick.t, posPick.slot, k + 1)} style={[st.chip, { minWidth: 48, alignItems: "center" }]}><Text allowFontScaling={false}>{n}</Text></TouchableOpacity>)}</View>
+      <View style={st.filters}>{POSN.slice(1, 11).map((n, k) => <TouchableOpacity key={n} onPress={() => setPos(posPick.t, posPick.slot, k + 1)} style={[st.chip, { minWidth: 48, alignItems: "center" }]}><Text allowFontScaling={false}>{n}</Text></TouchableOpacity>)}</View>
       <TouchableOpacity style={[st.btn, { marginTop: 8, alignSelf: "flex-start" }]} onPress={() => setPosPick(null)}><Text allowFontScaling={false}>閉じる</Text></TouchableOpacity>
     </View></View>}
   </View>;

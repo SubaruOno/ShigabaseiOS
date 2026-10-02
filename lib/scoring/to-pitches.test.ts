@@ -48,3 +48,15 @@ describe('妨害は旧Excelと同じ語で書く', () => {
     expect(fn(p, stateAt(0, []))).toBe('守備妨害');
   });
 });
+
+describe("交代だけの行（代走・代打）", () => {
+  it("代走・代打の行は投球の行にならないが、そのあとの走者・打者に反映され、名簿から名前が引ける", () => {
+    const sub = (subs: Page["subs"]): Page => ({ ...blank(), subs, rowType: "交代" } as any);
+    const plays = [page(1, "単打"), sub([{ t: 0, slot: 0, no: 21 }]), sub([{ t: 0, slot: 1, no: 22 }]), page("B", "ボール")];
+    const result = toAnalysisPitches({ gameId: "g", plays: plays.map((p, i) => ({ seq: i + 1, page: p })), lineup, teamIds: ["away", "home"], teamNames: ["先攻", "後攻"], gameDate: "2026-09-30", gameTime: "10:00", season: "秋季", kind: "リーグ戦", week: "1", day: "1", gameNumber: 1,
+      players: [{ team_id: "away", name: "代走くん", uniform_no: 21 }, { team_id: "away", name: "代打さん", uniform_no: 22 }] } as any);
+    expect(result).toHaveLength(2);
+    expect(result[1].runner_1st).toBe("代走くん");
+    expect(result[1].batter_name).toBe("代打さん");
+  });
+});
