@@ -230,13 +230,15 @@ function Linescore({
       const homeRuns = editHome.map((v) => (v === "" ? 0 : parseInt(v, 10) || 0));
       const awayScore = awayRuns.reduce((s, v) => s + v, 0);
       const homeScore = homeRuns.reduce((s, v) => s + v, 0);
-      const { error } = await supabase.from("games").update({
+      const { data, error } = await supabase.from("games").update({
         away_runs_per_inning: awayRuns,
         home_runs_per_inning: homeRuns,
         away_score: awayScore,
         home_score: homeScore,
-      }).eq("id", game.id);
+      }).eq("id", game.id).select("id");
       if (error) throw error;
+      // 権限がないと更新はエラーにならず0件で終わる。黙って閉じずに知らせる
+      if (!data?.length) throw new Error("スコアを直す権限がありません（アナリストか管理者のみ）");
     },
     onSuccess: () => {
       setSaveError(null);

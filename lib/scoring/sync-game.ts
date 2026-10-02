@@ -112,21 +112,25 @@ export async function syncScoringGame(game: LocalGame, userId: string, supabase:
   if (!analysisGameId) {
     // 旧Excelから取り込んだ試合（まだどの試合記録ともつながっていない行）だけを引き継ぐ。
     // つながり済みの行まで探すと、同じ日・同じ第何試合の別の試合を上書きしてしまう
-    const {data: legacy} = await supabase.from("games").select("id").is("scoring_game_id", null).gte("date", `${game.game_date}T00:00:00+09:00`).lt("date", nextDayJst(game.game_date)).eq("season",game.season).eq("kind",game.kind).eq("week",Number(game.week)).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).limit(1).maybeSingle();
+    const {data: legacy, error: legacyError} = await supabase.from("games").select("id").is("scoring_game_id", null).gte("date", `${game.game_date}T00:00:00+09:00`).lt("date", nextDayJst(game.game_date)).eq("season",game.season).eq("kind",game.kind).eq("week",Number(game.week)).eq("game_number",game.game_number).eq("home_team",homeName).eq("away_team",awayName).limit(1).maybeSingle();
+    if (legacyError) throw new Error(`旧Excelの試合を確認できませんでした: ${legacyError.message}`);
     analysisGameId = legacy?.id;
   }
   const lineScore = scoreLine({ plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames: [awayName,homeName] });
   const gameRow = { scoring_game_id: game.id, date: `${game.game_date}T${String(game.game_time ?? "00:00").slice(0,5)}:00+09:00`, season: game.season, kind: game.kind, week: game.week === "" ? null : Number(game.week), game_number: game.game_number || null, away_team: awayName, home_team: homeName, away_score: lineScore.awayScore, home_score: lineScore.homeScore, away_runs_per_inning: lineScore.awayRunsPerInning, home_runs_per_inning: lineScore.homeRunsPerInning, scorekeeper: game.umpire ?? null };
   if (analysisGameId) { const {error} = await supabase.from("games").update(gameRow).eq("id",analysisGameId); if(error)throw new Error(`分析用試合を更新できませんでした: ${error.message}`); }
   else { const {data,error}=await supabase.from("games").insert(gameRow).select("id").single();if(error)throw new Error(`分析用試合を作成できませんでした: ${error.message}`);analysisGameId=data.id; }
-  const {error:deleteError}=await supabase.from("pitches").delete().eq("game_id",analysisGameId);if(deleteError)throw new Error(`分析用投球を置き換えできませんでした: ${deleteError.message}`);
-  // 権限が足りないと削除はエラーにならず0件で終わる。残っていたら止めて、投球が2重に入るのを防ぐ
-  {const {count:left}=await supabase.from("pitches").select("id",{count:"exact",head:true}).eq("game_id",analysisGameId);if(left)throw new Error("試合結果の投球を入れ替える権限がありません。アナリストか管理者のアカウントで同期してください");}
   const teamNames: [string,string] = [awayName,homeName];
   const planNames = Object.fromEntries((plans ?? []).map(p => [String(p.id), p.old_excel_label || p.name]));
   const positionNames = Object.fromEntries((positions ?? []).map(p => [String(p.id), p.name]));
   const rows = toAnalysisPitches({ gameId: analysisGameId, players: rosterForNames as any, plays, lineup, teamIds: [game.away_team_id,game.home_team_id], teamNames, gameDate:game.game_date,gameTime:game.game_time,season:game.season,kind:game.kind,week:game.week,day:game.day,gameNumber:game.game_number,umpire:game.umpire,ballTypes:ballTypes??[],planNames,positionNames });
+  // 先に新しい投球を入れてから古い投球を消す。途中で通信が切れても、試合の投球が0件になることはない（やり直せば正しくそろう）
+  const {data:oldRows,error:oldError}=await supabase.from("pitches").select("id").eq("game_id",analysisGameId);if(oldError)throw new Error(`分析用投球を確認できませんでした: ${oldError.message}`);
   if(rows.length){const {error}=await supabase.from("pitches").insert(rows);if(error)throw new Error(`分析用投球を保存できませんでした: ${error.message}`);}
+  const oldIds=(oldRows??[]).map((r:any)=>r.id);
+  for(let k=0;k<oldIds.length;k+=200){const part=oldIds.slice(k,k+200);const {error}=await supabase.from("pitches").delete().in("id",part);if(error)throw new Error(`古い分析用投球を消せませんでした: ${error.message}`);}
+  // 権限が足りないと削除はエラーにならず0件で終わる。残っていたら止めて、投球が2重のままにしない
+  if(oldIds.length){const {count:left}=await supabase.from("pitches").select("id",{count:"exact",head:true}).in("id",oldIds.slice(0,200));if(left)throw new Error("試合結果の投球を入れ替える権限がありません。アナリストか管理者のアカウントで同期してください");}
   const all = await localStore.games();
   await localStore.saveGames(all.map(g => g.id === game.id ? { ...g, synced_at: new Date().toISOString() } : g));
 }
