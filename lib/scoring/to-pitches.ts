@@ -16,13 +16,15 @@ export function resultWords(page: Page, before: ReturnType<typeof stateAt>) {
   // 旧Excelで専用の語がある結果は、種類より先に名前で決める
   const label = page.res?.label;
   if (label === "守備妨害" || label === "打撃妨害" || label === "走塁妨害") return label;
+  // 旧Excel・本番の試合結果では、スリーバント失敗は「K3」（成績の画面も K3 を三振として数える）
+  if (label === "ｽﾘｰﾊﾞﾝﾄ失敗" || label === "スリーバント失敗") return "K3";
   // 旧Excelから取り込んだページは、結果の言葉がすでに旧Excelの言葉なのでそのまま使う
   if (label && OLD_RESULT_WORDS.has(label)) return label;
-  if (label === "ｽﾘｰﾊﾞﾝﾄ失敗") return "スリーバント失敗";
   if (typeof kind === "number") return ["", "単打", "二塁打", "三塁打", "本塁打"][kind] ?? "凡打死";
   if (kind === "S") return page.res?.label === "空振" ? before.s >= 2 ? "空振り三振" : "空振り" : before.s >= 2 ? "見逃し三振" : "見逃し";
   if (kind === "B") return before.b >= 3 ? "四球" : "ボール";
-  if (kind === "IBB") return "敬遠";
+  // 旧Excelに「敬遠」の語はなく四球として記録していた（成績の画面も四球を数える）
+  if (kind === "IBB") return "四球";
   if (kind === "hbp") return "死球";
   if (kind === "out") return page.res?.label === "邪飛" ? "ファールフライ" : "凡打死";
   if (kind === "fc") return "野手選択";
@@ -99,7 +101,8 @@ export function toAnalysisPitches(input: {
       // The scoring UI records absolute SVG field coordinates (home plate near x=46,y=238, outward/upward); legacy imports and spray-chart rendering use these same coordinates.
       hit_x: p.batted_ball?.x ?? null, hit_y: p.batted_ball?.y ?? null,
       strategy: planValues[0] ?? null, strategy2: planValues[1] ?? null, strategy_result: null,
-      error_type: p.res?.label === "失策出塁" ? "失策" : null,
+      // 本番の試合結果と同じく「守備位置＋エラーの種類」（例：6ファンブル）
+      error_type: (() => { const e = (p.catch_fielder ?? []).filter((c: any) => typeof c === "object" && c?.err) as { pos: number; err: string }[]; return e.length ? e.map(x => `${x.pos}${String(x.err).split(/[、,]/)[0]}`).join("") : null; })(),
       fielder: p.catch_fielder.map(x => typeof x === "number" ? input.positionNames?.[String(x)] ?? positionName[x] : input.positionNames?.[String(x.pos)] ?? positionName[x.pos]).filter(Boolean).join("、") || null,
     };
   });

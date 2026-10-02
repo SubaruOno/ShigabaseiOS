@@ -60,3 +60,13 @@ describe("交代だけの行（代走・代打）", () => {
     expect(result[1].batter_name).toBe("代打さん");
   });
 });
+
+describe("本番の試合結果と同じ言葉で書く", () => {
+  it("スリーバント失敗は K3、申告敬遠は 四球（成績の画面が数える言葉）", () => {
+    expect(rows([page("out", "ｽﾘｰﾊﾞﾝﾄ失敗", { ra: { 0: { out: true } } })])[0].batting_result).toBe("K3");
+    expect(rows([page("IBB", "申告敬遠")])[0].batting_result).toBe("四球");
+  });
+  it("エラーの種類は守備位置＋種類（例：6ファンブル）", () => {
+    expect(rows([page("e", "失策出塁", { catch_fielder: [{ pos: 6, err: "ファンブル" }] as any })])[0].error_type).toBe("6ファンブル");
+  });
+});
