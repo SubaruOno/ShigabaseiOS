@@ -52,7 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // 期限切れのログインを更新する問い合わせは、電波がないと終わらず起動画面で止まる。
+    // 数秒で打ち切り、端末に残っているログイン情報で先に進む（つながれば裏で更新される）
+    const storedSession = async (): Promise<Session | null> => {
+      try {
+        const key = (supabase.auth as any).storageKey as string;
+        const raw = Platform.OS === "web" ? null : await SecureStore.getItemAsync(key);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed?.user ? (parsed as Session) : null;
+      } catch { return null; }
+    };
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise<{ data: { session: Session | null } }>(resolve => setTimeout(async () => resolve({ data: { session: await storedSession() } }), 6000)),
+    ]).then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
