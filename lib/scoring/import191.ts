@@ -55,7 +55,7 @@ export function import191(rows:Saved191Row[], headers:readonly string[]=COLUMN19
     // 牽制の行（プレイの種類＝牽制）だけを牽制として扱う。投球の行に付いた牽制の印は、その言葉だけ残す
     p.pickoff_throw_to=value(r,41)==='牽制'?(number(r,53) || ({一塁牽制:1,二塁牽制:2,三塁牽制:3} as Record<string,number>)[value(r,53)] || 1):0;
     if(value(r,53)&&value(r,53)!=='0')(p as any).pickoffLabel=value(r,53);
-    p.skip=value(r,45)==='0'&&!!rawResult&&rawResult!=='0';
+    p.skip=value(r,45)==='0'&&!number(r,43)&&!number(r,44)&&!!rawResult&&rawResult!=='0'; // 球種が空でもコースがある行は「球種の入れ忘れ」で、打席スキップではない
     const to:Record<string,number>={継続:0,残留:0,二進:2,三進:3,本進:4};
     for(let base=1;base<=3;base++) {const status=value(r,36+base);if(!status||status==='0')continue;const dest=to[status];// 「継続」はふつうの状態なので何も入れない。「残留」は打球のときに手で止めた印。アウトは旧Excelの言葉を残す
       // 継続＝その場に留まる（自動で進めない）、残留＝打球で手で止めた
