@@ -76,6 +76,8 @@ const inPlayKind=(k:unknown)=>typeof k==='number'||['out','sac','sf','e','fc'].i
 // 利き手は L/R/S（マスタ）でも 左/右/両（旧Excel）でも受け取る
 const handJa=(h?:string|null):Hand=>h==='L'||h==='左'?'左':h==='S'||h==='両'?'両':'右';
 /** Build the saved-file-order rows from the local scoring model. */
+// 191列の1行になるページか（結果・牽制・打席スキップ・交代・タイブレークのどれかがある）。デバックチェックで行からページへ戻るときにも使う
+export const exportsRow = (page: unknown) => { const p = page as any; return !!(p?.rec||p?.res||p?.pickoff_throw_to||p?.skip||p?.subs?.length||p?.tb||p?.rowType||p?.sync); };
 export function export191Game(game: Export191Game, lineup: Export191Lineup[], plays: Export191Play[], masters: Export191Masters = {}): (string|number)[][] {
   const ids: [string,string] = [game.away_team_id ?? 'away', game.home_team_id ?? 'home'];
   const teams: [string,string] = [game.away_name ?? game.awayTeam ?? '', game.home_name ?? game.homeTeam ?? ''];
@@ -99,7 +101,7 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     pitcherHands: ids.map(id=>handJa(pitcher(id)?.throwing_hand)==='左'?'左':'右') as [string,string],
   };
   // 結果・牽制・打席スキップ・交代・タイブレークのどれもない空のページ（メモだけ等）は行にしない
-  const clean = plays.filter(x=>{const p=x.page as any;return !!(p.rec||p.res||p.pickoff_throw_to||p.skip||p.subs?.length||p.tb||p.rowType||p.sync)});
+  const clean = plays.filter(x=>exportsRow(x.page));
   // 旧VBA（GameData.frm）の守備位置ごとの氏名（175〜181列）の書き方を再現する：
   // 試合開始・攻守交代の最初の行・交代の行でだけ、守備側の打順を1番から見て（D・H・R以外）入れ物に書き、ほかの行は前の行を引き継ぐ。
   // 書くたびに入れ物を空にする（旧VBAはフォームを閉じるたびに入れ物が空になる）。

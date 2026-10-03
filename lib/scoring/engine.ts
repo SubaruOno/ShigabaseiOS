@@ -102,7 +102,9 @@ export function applyPage(st: GameState, p: Page) {
 export function checkCommit(st: GameState, p: Page): string | null {
   if (p.skip && !(p.ra[0] && (p.ra[0].out || p.ra[0].to))) return '打席結果（アウトまたは進塁）を入力してください';
   if (!p.res && !p.skip && !p.pickoff_throw_to) return '入力がありません';
-  if (p.res?.kind === 'FO' && !p.feature) return '打球の質を選択してください';
+  // 打球が前に飛んだ結果とファウルは、打球の質（ゴロ・フライ・ライナー）がないと確定しない（BASSと同じ）
+  { const k = p.res?.kind, l = p.res?.label ?? ''; const batted = typeof k === 'number' || k === 'FO' || k === 'out' || k === 'sac' || k === 'sf' || k === 'fc' || (k === 'e' && l !== '振り逃げ');
+    if (batted && !['守備妨害', '打撃妨害', '走塁妨害', 'ｽﾘｰﾊﾞﾝﾄ失敗', 'スリーバント失敗'].includes(l) && !p.feature) return '打球の質を選択してください'; }
   const lineup = st.lu[st.half]; if (lineup.bats[st.bi[st.half]] === '両' && !p.handB && p.res?.kind !== 'IBB' && !p.pickoff_throw_to) return '右打席・左打席を選んでください';
   if (p.res) { const k = p.res.kind, m = moves(st, p)[0], ended = m && (m.out || m.to); if (((k === 'S' && st.s >= 2) || k === 'sf' || k === 'io' || (k === 'S' && st.s + 1 >= 3)) && !ended) return '打席結果（アウトまたは進塁）を入力してください'; }
   return null;

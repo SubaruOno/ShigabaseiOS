@@ -6,6 +6,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { applyPage, applyPre, blank, initState, batterOf, checkCommit, GameState, moves, Page, pitcherOf, stateAt, subError, Substitution, teamSetupsFromLineup } from "@/lib/scoring/engine";
 import { SubsPanel } from "@/components/scoring/SubsPanel";
+import { GameEditPanel } from "@/components/scoring/GameEditPanel";
+import { summarizeGame } from "@/lib/scoring/game-summary";
+import { debugCheck, type DebugIssue } from "@/lib/scoring/debug-check";
+import { export191Game, exportsRow } from "@/lib/scoring/export191";
 import { withTimeout } from "@/lib/scoring/net";
 import { localStore, LocalGame, LocalPlay, isUuid, playMutationId } from "@/lib/scoring/local-store";
 import { buildRosterPlayers } from "@/lib/scoring/roster";
@@ -41,7 +45,7 @@ const Btn=({x,y,w,h=30,label,bg="#fff",fg="#212529",border="#ced4da",radius=4,si
 const Pill=({x,y,w,label,onPress,active,color="#4c9aff"}:any)=><TouchableOpacity onPress={onPress} style={[s.a,s.pill,{left:x,top:y,width:w,height:30,backgroundColor:active?color:"#fff",borderColor:active?color:"#ced4da"}]}><Txt size={13} color={active?"#fff":"#212529"}>{label}</Txt></TouchableOpacity>;
 const Field=({x,y,w,h,value,onPress,size=14,pad}:any)=><Pressable onPress={onPress} style={[s.a,s.fld,{left:x,top:y,width:w,height:h},pad!=null&&{paddingHorizontal:pad}]}><Txt size={size} numberOfLines={1}>{value}</Txt></Pressable>;
 export default function ScoringInput(){
- const {id=""}=useLocalSearchParams<{id:string}>();const {user,isLoading,hasRole}=useAuth();const {width,height}=useWindowDimensions();
+ const {id="",edit:openEdit}=useLocalSearchParams<{id:string;edit?:string}>();const [editOpen,setEditOpen]=useState(openEdit==="1"),[issues,setIssues]=useState<DebugIssue[]|null>(null);const {user,isLoading,hasRole}=useAuth();const {width,height}=useWindowDimensions();
  const [game,setGame]=useState<LocalGame|null>(null),[pages,setPages]=useState<Page[]>([]),[results,setResults]=useState<Row[]>([]),[teams,setTeams]=useState<Row[]>([]),[roster,setRoster]=useState<Row[]>([]),[ballTypes,setBallTypes]=useState<Row[]>([]),[plans,setPlans]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
  const [pov,setPov]=useState(false),[fielderMode,setFielderMode]=useState(true),[pickMode,setPickMode]=useState(false),[errMode,setErrMode]=useState(false),[homeOpen,setHomeOpen]=useState(false),[runnerSel,setRunnerSel]=useState<{b:number,type:"adv"|"steal"|"other"}|null>(null),[openMenu,setOpenMenu]=useState<string|null>(null),[focusPage,setFocusPage]=useState(0),[toast,setToast]=useState("");
  const [modal,setModal]=useState<ModalKind>(null),[modalText,setModalText]=useState(""),[modalOk,setModalOk]=useState<(()=>void)|null>(null),[errorPos,setErrorPos]=useState(0),[errorTypes,setErrorTypes]=useState<string[]>([]),[subTeam,setSubTeam]=useState(0),[subSlot,setSubSlot]=useState(0),[subNo,setSubNo]=useState(""),[subPos,setSubPos]=useState(1),[subBat,setSubBat]=useState("右"),[subThrow,setSubThrow]=useState("右"),[tb,setTb]=useState<Page["tb"]|null>(null),[timer,setTimer]=useState("00:00.00"),[swOn,setSwOn]=useState(false),[swStart,setSwStart]=useState(0),[swElapsed,setSwElapsed]=useState(0);
@@ -157,15 +161,24 @@ const slot=subSlot===9?"P":subSlot;edit(p=>p.subs.push(slot==="P"?{t:subTeam as 
 const undo=()=>{if(!(focusPage===pages.length-1&&focusPage>0))return;const last=pages[pages.length-2];const what=last?.res?.label??(last?.pickoff_throw_to?"牽制":last?.skip?"打席スキップ":last?.subs?.length?"選手交代":"記録");
 openConfirm(`直前に確定した「${what}」（ページ${pages.length-1}）を取り消しますか？`,async()=>{const next=pages.slice(0,-2);next.push(blank());await saveNow(next);setFocusPage(next.length-1)})};
  const pageNav=(idx:number)=>{setFocusPage(Math.max(0,Math.min(idx,pages.length-1)));setHomeOpen(false);setRunnerSel(null);setOpenMenu(null)};
- const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{// 入力を保存し、試合を「完了」にして得点を残す（191列の最後の行が「試合終了」になる）
+ const finishGame=async()=>{// 入力を保存し、試合を「完了」にして得点を残す（191列の最後の行が「試合終了」になる）
 await saveNow(pages);{const games=await localStore.games();const fin=stateAt(pages.length,pages,setups);await localStore.saveGames(games.map(g=>g.id===id?{...g,status:"completed",score_away:fin.score[0],score_home:fin.score[1],synced_at:undefined}:g))}
-if(typeof window!=="undefined"&&typeof (window as any).dispatchEvent==="function"&&typeof Event!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));router.dismissTo("/scoring" as any)})};
+if(typeof window!=="undefined"&&typeof (window as any).dispatchEvent==="function"&&typeof Event!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));router.dismissTo("/scoring" as any)};
+ // 入力終了：確認のあと、BASSと同じく試合編集を開く（打席を押すとその入力に戻れる）
+ const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{await saveNow(pages);setIssues(null);setEditOpen(true)})};
+ const summary=useMemo(()=>editOpen?summarizeGame(pages.slice(0,-1),setups):null,[editOpen,pages,setups]);
+ // デバックチェック：Excelに書き出すのと同じ191列を作って確かめる
+ const runCheck=()=>{if(!game)return;const plays=pages.map((page,i)=>({seq:i+1,page}));const rows=export191Game({...game,home_name:teamNames[1],away_name:teamNames[0]} as any,lineup as any,plays as any,{ballTypes:ballTypes as any,players:roster as any});const sw=new Set<string>((lineup as any[]).filter(r=>(r.batting_hand??r.player_snapshot?.bat_hand)==="S").map(r=>String(r.player_snapshot?.name??"")));setIssues(debugCheck(rows,sw))};
+ const rowToPage=(row:number)=>{let n=-1;for(let i=0;i<pages.length;i++){if(exportsRow(pages[i])){n++;if(n===row)return i}}return pages.length-1};
+ const jumpTo=(page:number)=>{setEditOpen(false);pageNav(page)};
  const inningTable=()=>{const next=preview,t=next.half,i0=next.bi[t];return <View><Text allowFontScaling={false} style={s.dialogTitle}>イニングの確認</Text><Text allowFontScaling={false} style={s.subheading}>{teamNames[t]}　次の打者 {i0+1}番</Text>{next.lu[t].order.map((n,i)=><View key={i} style={[s.tableRow,i===i0&&{backgroundColor:"#20c997"}]}><Text allowFontScaling={false} style={i===i0?{color:"#fff"}:undefined}>{i+1}　#{n}　{next.lu[t].bats[i]}</Text></View>)}<Text allowFontScaling={false} style={{marginTop:8}}>{teamNames[0]} {next.score[0]}　{teamNames[1]} {next.score[1]}</Text></View>};
  
  const planList=(key:string)=>plans.filter(x=>Number(x.show_index)===(key==="バント"?1:key==="盗塁"?2:3));
  const setPlan=(key:string,v:string|null)=>{edit(p=>{if(!v||p.plan[key]===v)delete p.plan[key];else p.plan[key]=v});setOpenMenu(null)};
  const inRight=(bh==="右")!==pov;const handsLeft=pov?"左":"右",handsRight=pov?"右":"左";
- const mitts=inRight?[["外角高",6],["高め",3],["内角高",5],["外角",2],["真ん中",4],["内角",1]]:[["内角高",5],["高め",3],["外角高",6],["内角",1],["真ん中",4],["外角",2]];
+ // 構えは旧Excelと同じ5×5のマスの番号（1〜25、捕手から見て左上が1）で持つ。ボタンはストライクゾーンの上段と中段の6マス。
+// 捕手から見ると、右打者の内角は左側（過去の死球のコースで確認）。投手目線では左右が入れ替わる
+const mitts=(()=>{const name=(code:number)=>{const col=(code-1)%5,row=Math.floor((code-1)/5);const inside=bh==="左"?col===3:col===1;const outside=bh==="左"?col===1:col===3;return (row===1?(inside?"内角高":outside?"外角高":"高め"):(inside?"内角":outside?"外角":"真ん中"))};const rows=[[7,8,9],[12,13,14]].map(r=>pov?[...r].reverse():r);return rows.flat().map(code=>[name(code),code] as [string,number])})();
  const clickStage=(e:any)=>{
 // 塁の四角は小さく、図の上の印とも重なるので、押した位置から一番近い塁を自分で判定する
 if((runnerSel||pickMode)&&e?.nativeEvent){const {fx,fy}=fieldFrac(e);const px=FIELD_VB.x+fx*FIELD_VB.w,py=FIELD_VB.y+fy*FIELD_VB.h;let best=-1,bd=24;for(const k of [0,1,2,3]){const d=Math.hypot(px-BASEXY[k][0],py-BASEXY[k][1]);if(d<bd){bd=d;best=k}}if(best>=0){baseClick(best===0?4:best);return}}
@@ -219,6 +232,7 @@ return <View style={[s.pop,{left,top,flexDirection:"column",width:pw}]}>{items.m
  {homeOpen&&homeMoves.length>0&&<View style={[s.homePanel,{left:1070,top:220,width:216}]}>{homeMoves.sort((a,b)=>b-a).map(b=><View key={b} style={{marginBottom:4}}><Text allowFontScaling={false} style={{fontSize:12,fontWeight:"700"}}>{b===0?"打者":`${b}塁走者`}</Text><View style={{flexDirection:"row"}}>{[["アウト","out"],["得点","run"],["打点","rbi"]].map(([label,k])=><TouchableOpacity key={k} onPress={()=>setHome(b,k as any)} style={[s.homeOption,(()=>{const m:any=currentPage.ra[b];return k==="out"?!!m?.homeOut:k==="rbi"?!!m?.rbi:!!m?.scored&&!m?.rbi})()&&s.homeSelected]}><Text allowFontScaling={false} style={{fontSize:11}}>{label}</Text></TouchableOpacity>)}{/* 手で本塁に進めたのを取り消し、結果から決まる位置（単打なら打者は1塁）に戻す */}<TouchableOpacity onPress={()=>edit(p=>{delete p.ra[b]})} style={s.homeOption}><Text allowFontScaling={false} style={{fontSize:11,color:"#868e96"}}>↺ 戻る</Text></TouchableOpacity></View></View>)}<TouchableOpacity onPress={()=>setHomeOpen(false)} style={s.homeOk}><Text allowFontScaling={false} style={{color:"#fff",textAlign:"center"}}>OK</Text></TouchableOpacity></View>}
  {toast!==""&&<ABS x={530} y={40} w={452} h={45} style={s.toast}><Txt color="#fff" size={15}>{toast}</Txt></ABS>}
  </View></View>
+ {editOpen&&summary&&<View style={[StyleSheet.absoluteFill,{backgroundColor:"#f8f9fa",padding:20,paddingTop:40,zIndex:50}]}><GameEditPanel teamNames={teamNames} summary={summary} nameOf={subNameOf} issues={issues} onCheck={runCheck} onJumpPage={jumpTo} onJumpRow={row=>jumpTo(rowToPage(row))} onBack={()=>setEditOpen(false)} onFinish={finishGame}/></View>}
  <Modal visible={modal!==null} transparent animationType="fade" onRequestClose={()=>setModal(null)}><View style={s.scrim}><View style={[s.dialog,modal==="player"&&s.playerDialog,modal==="subs"&&s.subsDialog]}>
  {modal==="inning"?inningTable():modal==="summary"?summaryContent():modal==="confirm"?<Text allowFontScaling={false} style={{fontSize:17}}>{modalText}</Text>:null}
  {modal==="pickoff"&&(()=>{const base=currentPage.pickoff_throw_to;const pg:any=currentPage;
