@@ -9,6 +9,7 @@ import { useLocalSearchParams, Redirect, useNavigation } from "expo-router";
 import { useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetchAll } from "@/lib/fetch-all";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -66,14 +67,16 @@ export default function OpponentPitcherDetail() {
   const { data: pitches, isLoading } = useQuery<Pitch[]>({
     queryKey: ["opponent-pitcher-detail", name],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1000行を超える投手でも全部読む
+      const data = await fetchAll((from, to) => supabase
         .from("pitches")
         .select(
-          "pitch_type, pitch_speed, batting_result, game_id, games(date, away_team, home_team)"
+          "id, pitch_type, pitch_speed, batting_result, game_id, games(date, away_team, home_team)"
         )
-        .eq("pitcher_name", name);
-      if (error) throw error;
-      return data as Pitch[];
+        .eq("pitcher_name", name)
+        .order("id")
+        .range(from, to));
+      return data as unknown as Pitch[];
     },
     enabled: !!user && !!name,
   });

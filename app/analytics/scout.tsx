@@ -12,6 +12,7 @@ import { Redirect } from "expo-router";
 import { useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import { fetchAll } from "@/lib/fetch-all";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -239,14 +240,17 @@ export default function ScoutScreen() {
     queryKey: ["scout_all_players_v2"],
     queryFn: async () => {
       const [{ data: batterData }, { data: pitcherData }, { data: gamesData }] = await Promise.all([
-        supabase.from("pitches")
-          .select("batter_name, batter_hand, top_bottom, games(away_team, home_team)")
+        // 1回に1000行までしか返らないので、全投球を範囲を変えて読む（選手の一覧が欠けないように）
+        fetchAll((from, to) => supabase.from("pitches")
+          .select("id, batter_name, batter_hand, top_bottom, games(away_team, home_team)")
           .not("batter_name", "is", null)
-          .limit(5000),
-        supabase.from("pitches")
-          .select("pitcher_name, pitcher_hand, top_bottom, games(away_team, home_team)")
+          .order("id")
+          .range(from, to)).then(data => ({ data })),
+        fetchAll((from, to) => supabase.from("pitches")
+          .select("id, pitcher_name, pitcher_hand, top_bottom, games(away_team, home_team)")
           .not("pitcher_name", "is", null)
-          .limit(5000),
+          .order("id")
+          .range(from, to)).then(data => ({ data })),
         supabase.from("games").select("away_team, home_team"),
       ]);
       const map = new Map<string, PlayerHit>();
@@ -324,11 +328,12 @@ export default function ScoutScreen() {
   const { data: battingPitches, isLoading: loadingBatting } = useQuery<PitchRow[]>({
     queryKey: ["scout_batting_multi", sortedPlayers],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const data = await fetchAll((from, to) => supabase
         .from("pitches")
         .select("id, batter_name, batter_order, pitcher_name, game_id, pa_complete, batting_result, pitch_type, pitch_speed, hit_x, hit_y, games(id, date, away_team, home_team)")
-        .in("batter_name", selectedPlayers);
-      if (error) throw error;
+        .in("batter_name", selectedPlayers)
+        .order("id")
+        .range(from, to));
       return data as unknown as PitchRow[];
     },
     enabled: !!user && step === "result" && selectedPlayers.length > 0,
@@ -338,11 +343,12 @@ export default function ScoutScreen() {
   const { data: pitchingPitches, isLoading: loadingPitching } = useQuery<PitchRow[]>({
     queryKey: ["scout_pitching_multi", sortedPlayers],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const data = await fetchAll((from, to) => supabase
         .from("pitches")
         .select("id, batter_name, batter_order, pitcher_name, game_id, pa_complete, batting_result, pitch_type, pitch_speed, course_x, course_y, games(id, date, away_team, home_team)")
-        .in("pitcher_name", selectedPlayers);
-      if (error) throw error;
+        .in("pitcher_name", selectedPlayers)
+        .order("id")
+        .range(from, to));
       return data as unknown as PitchRow[];
     },
     enabled: !!user && step === "result" && selectedPlayers.length > 0,

@@ -13,6 +13,7 @@ import { useState, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import { fetchAll } from "@/lib/fetch-all";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -155,14 +156,14 @@ export default function PlayerStatsScreen() {
   const { data: battingPitches, isLoading: loadingBatting } = useQuery<PitchWithGame[]>({
     queryKey: ["player_batting", decodedName],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pitches")
-        .select(
+      // 1000行を超える選手（投手は最大3000球ほど）でも全部読む
+      const data = await fetchAll((from, to) => supabase
+        .from("pitches")        .select(
           "id, pa_complete, batter_name, batter_order, batting_result, pitcher_name, pitcher_hand, pitch_type, pitch_speed, hit_x, hit_y, top_bottom, game_id, games(id, date, season, kind, away_team, home_team)"
         )
         .eq("batter_name", decodedName)
-        .order("game_id");
-      if (error) throw error;
+        .order("game_id").order("id")
+        .range(from, to));
       return data as unknown as PitchWithGame[];
     },
     enabled: !!user && !!decodedName,
@@ -174,14 +175,14 @@ export default function PlayerStatsScreen() {
   const { data: pitchingPitches, isLoading: loadingPitching } = useQuery<PitchWithGame[]>({
     queryKey: ["player_pitching", decodedName],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pitches")
-        .select(
+      // 1000行を超える選手（投手は最大3000球ほど）でも全部読む
+      const data = await fetchAll((from, to) => supabase
+        .from("pitches")        .select(
           "id, pa_complete, batting_result, batter_hand, pitch_type, pitch_speed, course_x, course_y, game_id, games(id, date, season, kind, away_team, home_team)"
         )
         .eq("pitcher_name", decodedName)
-        .order("game_id");
-      if (error) throw error;
+        .order("game_id").order("id")
+        .range(from, to));
       return data as unknown as PitchWithGame[];
     },
     enabled: !!user && !!decodedName,
