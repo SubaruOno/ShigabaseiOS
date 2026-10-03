@@ -28,7 +28,7 @@ export function summarizeGame(pages: Page[], setups: TeamSetup[]): GameSummary {
     const log = st.paLog[key] ?? [];
     if (log.length > before) {
       const k = page.res?.kind, label = page.res?.label ?? "";
-      const text = page.skip ? "タイム" : k === "S" ? (label === "空振" ? "空振り三振" : "見逃し三振") : k === "B" ? "四球" : k === "IBB" ? "申告敬遠" : label || log[log.length - 1];
+      const text = page.skip && !page.res ? (st.paLog[key]?.at(-1) === "凡退" ? "打席スキップ（凡退）" : "打席スキップ（出塁）") : k === "S" ? (label.includes("見逃") ? "見逃し三振" : "空振り三振") : k === "B" ? "四球" : k === "IBB" ? "申告敬遠" : label || log[log.length - 1];
       pas.push({ team: offense as 0 | 1, slot, batter, inning, text, page: index });
       p.batters++;
       if (typeof k === "number") p.hits++;

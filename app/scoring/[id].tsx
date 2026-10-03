@@ -166,7 +166,7 @@ await saveNow(pages);{const games=await localStore.games();const fin=stateAt(pag
 if(typeof window!=="undefined"&&typeof (window as any).dispatchEvent==="function"&&typeof Event!=="undefined")window.dispatchEvent(new Event("scoring-state-changed"));router.dismissTo("/scoring" as any)};
  // 入力終了：確認のあと、BASSと同じく試合編集を開く（打席を押すとその入力に戻れる）
  const openSummary=()=>{setModal("confirm");setModalText("入力を終了しますか？");setModalOk(()=>async()=>{await saveNow(pages);setIssues(null);setEditOpen(true)})};
- const summary=useMemo(()=>editOpen?summarizeGame(pages.slice(0,-1),setups):null,[editOpen,pages,setups]);
+ const summary=editOpen?summarizeGame(pages.slice(0,-1),setups):null;
  // デバックチェック：Excelに書き出すのと同じ191列を作って確かめる
  const runCheck=()=>{if(!game)return;const plays=pages.map((page,i)=>({seq:i+1,page}));const rows=export191Game({...game,home_name:teamNames[1],away_name:teamNames[0]} as any,lineup as any,plays as any,{ballTypes:ballTypes as any,players:roster as any});const sw=new Set<string>((lineup as any[]).filter(r=>(r.batting_hand??r.player_snapshot?.bat_hand)==="S").map(r=>String(r.player_snapshot?.name??"")));setIssues(debugCheck(rows,sw))};
  const rowToPage=(row:number)=>{let n=-1;for(let i=0;i<pages.length;i++){if(exportsRow(pages[i])){n++;if(n===row)return i}}return pages.length-1};
