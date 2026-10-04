@@ -96,7 +96,7 @@ export function export191Game(game: Export191Game, lineup: Export191Lineup[], pl
     lineupNames: ids.map(id=>slots(id).map(name)) as [string[],string[]],
     lineupPositions: ids.map(id=>slots(id).map(r=>String(r?.position_id ?? 0))) as [string[],string[]],
     lineupNos: ids.map(id=>slots(id).map((r,s)=>no(r,s))) as [number[],number[]],
-    playerNames: ids.map((id,t)=>Object.fromEntries([...rows.filter(r=>r.team_id===id).map(r=>[String(no(r,(r.slot??1)-1)),name(r)] as const),...(masters.players??[]).filter(p=>p.team_id===id&&p.name).map(p=>[String(Number(p.uniform_no??p.show_index)),String(p.name)] as const)])) as [Record<string,string>,Record<string,string>],
+    playerNames: ids.map((id,t)=>Object.fromEntries([...(masters.players??[]).filter(p=>p.team_id===id&&p.name).map(p=>[String(Number(p.uniform_no??p.show_index)),String(p.name)] as const),...rows.filter(r=>r.team_id===id).map(r=>[String(no(r,(r.slot??1)-1)),name(r)] as const)]) /* この試合に出た選手を名簿より優先する */) as [Record<string,string>,Record<string,string>],
     hands: ids.map(id=>slots(id).map(r=>handJa(r?.batting_hand))) as [string[],string[]],
     pitcherHands: ids.map(id=>handJa(pitcher(id)?.throwing_hand)==='左'?'左':'右') as [string,string],
   };
