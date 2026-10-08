@@ -226,8 +226,29 @@ export default function BullpenRecord() {
                     i === (players ?? []).length - 1 && { borderBottomWidth: 0 },
                   ]}
                   onPress={() => {
-                    setSelectedPlayer(p);
-                    setStep("pitching");
+                    // 別の投手に替えるときは、前の投手の投球を持ち越さない
+                    const start = () => {
+                      if (selectedPlayer?.id !== p.id) {
+                        setPitches([]);
+                        setTappedCourse(null);
+                        setSpeedText("");
+                        setSessionName("");
+                      }
+                      setSelectedPlayer(p);
+                      setStep("pitching");
+                    };
+                    if (selectedPlayer && selectedPlayer.id !== p.id && pitches.length > 0) {
+                      Alert.alert(
+                        "投手を替えますか",
+                        `${selectedPlayer.name}の${pitches.length}球は保存されずに消えます`,
+                        [
+                          { text: "やめる", style: "cancel" },
+                          { text: "替える", style: "destructive", onPress: start },
+                        ]
+                      );
+                      return;
+                    }
+                    start();
                   }}
                 >
                   <Text style={[styles.playerNum, { color: colors.icon }]}>
