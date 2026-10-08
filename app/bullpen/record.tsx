@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -51,6 +51,12 @@ const I2 = 158.25;
 
 const ZONE_SIZE = Math.min(Dimensions.get("window").width - 48, 264);
 
+// 記録日は日本時間の今日（toISOString は世界標準時なので、朝9時前だと前日になる）
+function todayJst(): string {
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+
 type Step = "player" | "pitching" | "finish";
 
 type PitchEntry = {
@@ -77,6 +83,8 @@ export default function BullpenRecord() {
   const [tappedCourse, setTappedCourse] = useState<{ x: number; y: number } | null>(null);
   const [sessionName, setSessionName] = useState("");
   const [saving, setSaving] = useState(false);
+  // 保存ボタンの連打で同じ記録が2つできないように、再描画を待たずに止める
+  const savingRef = useRef(false);
 
   const cardBg = colors.cardBg;
   const borderColor = colors.borderColor;
@@ -148,6 +156,8 @@ export default function BullpenRecord() {
       },
     ]);
     setTappedCourse(null);
+    // 前の球の球速を次の球に持ち越さない
+    setSpeedText("");
   };
 
   const undoLastPitch = () => {
@@ -155,20 +165,23 @@ export default function BullpenRecord() {
   };
 
   const handleSave = async () => {
-    if (!selectedPlayer || pitches.length === 0) return;
+    if (!selectedPlayer || pitches.length === 0 || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    let sessionId: string | null = null;
     try {
       const { data: sessionData, error: sessionError } = await supabase
         .from("bullpen_sessions")
         .insert({
           player_id: selectedPlayer.id,
-          date: new Date().toISOString().split("T")[0],
+          date: todayJst(),
           session_name: sessionName.trim() || null,
           created_by: user.id,
         })
         .select("id")
         .single();
       if (sessionError) throw sessionError;
+      sessionId = sessionData.id;
 
       const { error: pitchError } = await supabase.from("bullpen_pitches").insert(
         pitches.map((p, i) => ({
@@ -182,13 +195,17 @@ export default function BullpenRecord() {
         }))
       );
       if (pitchError) throw pitchError;
+      sessionId = null;
 
       Alert.alert("保存完了", `${selectedPlayer.name}の投球データを保存しました`, [
         { text: "OK", onPress: () => router.replace("/bullpen" as any) },
       ]);
     } catch {
-      Alert.alert("エラー", "保存に失敗しました");
+      // 投球の保存で失敗したら、先に作った枠を消して0球の記録を残さない
+      if (sessionId) await supabase.from("bullpen_sessions").delete().eq("id", sessionId);
+      Alert.alert("エラー", "保存に失敗しました。入力した投球は残っているので、もう一度保存してください");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -237,10 +254,13 @@ export default function BullpenRecord() {
                       setSelectedPlayer(p);
                       setStep("pitching");
                     };
-                    if (selectedPlayer && selectedPlayer.id !== p.id && pitches.length > 0) {
+                    const hasInput = pitches.length > 0 || speedText.trim() !== "" || tappedCourse !== null;
+                    if (selectedPlayer && selectedPlayer.id !== p.id && hasInput) {
                       Alert.alert(
                         "投手を替えますか",
-                        `${selectedPlayer.name}の${pitches.length}球は保存されずに消えます`,
+                        pitches.length > 0
+                          ? `${selectedPlayer.name}の${pitches.length}球は保存されずに消えます`
+                          : `${selectedPlayer.name}に入力中の球速・コースは消えます`,
                         [
                           { text: "やめる", style: "cancel" },
                           { text: "替える", style: "destructive", onPress: start },

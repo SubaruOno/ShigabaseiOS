@@ -20,6 +20,7 @@ import Svg, {
   Text as SvgText,
 } from "react-native-svg";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/fetch-all";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
@@ -197,12 +198,14 @@ export default function BullpenPlayerDetail() {
       const sessionIds = (sessionsData ?? []).map((s) => s.id);
       let pitches: Pitch[] = [];
       if (sessionIds.length > 0) {
-        const { data: pitchData, error: pitchErr } = await supabase
+        // 1000球を超えても全部読む
+        const pitchData = await fetchAll((from, to) => supabase
           .from("bullpen_pitches")
           .select("id, session_id, pitch_number, pitch_type, pitch_speed, is_strike, course_x, course_y")
-          .in("session_id", sessionIds);
-        if (pitchErr) throw pitchErr;
-        pitches = (pitchData ?? []) as Pitch[];
+          .in("session_id", sessionIds)
+          .order("id")
+          .range(from, to));
+        pitches = pitchData as unknown as Pitch[];
       }
 
       return {
