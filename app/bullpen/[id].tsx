@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, Stack, Redirect } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, {
   G,
@@ -20,6 +21,7 @@ import Svg, {
   Text as SvgText,
 } from "react-native-svg";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/fetch-all";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
@@ -166,7 +168,10 @@ function TrendChart({
 
 export default function BullpenPlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const canRecord = hasRole("analyst") || hasRole("admin");
+  const queryClient = useQueryClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const [tab, setTab] = useState<"sessions" | "trend">("sessions");
@@ -197,12 +202,14 @@ export default function BullpenPlayerDetail() {
       const sessionIds = (sessionsData ?? []).map((s) => s.id);
       let pitches: Pitch[] = [];
       if (sessionIds.length > 0) {
-        const { data: pitchData, error: pitchErr } = await supabase
+        // 1000球を超えても全部読む
+        const pitchData = await fetchAll((from, to) => supabase
           .from("bullpen_pitches")
           .select("id, session_id, pitch_number, pitch_type, pitch_speed, is_strike, course_x, course_y")
-          .in("session_id", sessionIds);
-        if (pitchErr) throw pitchErr;
-        pitches = (pitchData ?? []) as Pitch[];
+          .in("session_id", sessionIds)
+          .order("id")
+          .range(from, to));
+        pitches = pitchData as unknown as Pitch[];
       }
 
       return {
@@ -246,6 +253,39 @@ export default function BullpenPlayerDetail() {
         strikeRate: e.total > 0 ? (e.strikes / e.total) * 100 : 0,
       }));
   }, [statsMap]);
+
+  const confirmDelete = (session: Session, total: number) => {
+    Alert.alert(
+      "記録を削除しますか",
+      `${session.date.replace(/-/g, "/")}の${total}球を削除します。元に戻せません`,
+      [
+        { text: "やめる", style: "cancel" },
+        {
+          text: "削除する",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingId(session.id);
+            try {
+              // 投球を先に消してから記録の枠を消す
+              const { error: pe } = await supabase.from("bullpen_pitches").delete().eq("session_id", session.id);
+              if (pe) throw pe;
+              const { error: se } = await supabase.from("bullpen_sessions").delete().eq("id", session.id);
+              if (se) throw se;
+              setExpandedId(null);
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["bullpen_player", id] }),
+                queryClient.invalidateQueries({ queryKey: ["bullpen_index"] }),
+              ]);
+            } catch {
+              Alert.alert("エラー", "削除に失敗しました");
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (!user) return <Redirect href="/login" />;
 
@@ -374,6 +414,24 @@ export default function BullpenPlayerDetail() {
                               />
                             </>
                           )}
+
+                          {/* 記録の削除（アナリスト・管理者のみ） */}
+                          {canRecord && (
+                            <TouchableOpacity
+                              style={[styles.deleteBtn, { borderColor: "#dc2626" }]}
+                              disabled={deletingId === session.id}
+                              onPress={() => confirmDelete(session, stats.total)}
+                            >
+                              {deletingId === session.id ? (
+                                <ActivityIndicator size="small" color="#dc2626" />
+                              ) : (
+                                <>
+                                  <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                                  <Text style={styles.deleteText}>この記録を削除</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          )}
                         </View>
                       )}
                     </View>
@@ -444,6 +502,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailLabel: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  deleteText: { color: "#dc2626", fontSize: 14, fontWeight: "600" },
   typeRow: { flexDirection: "row", paddingVertical: 6 },
   typeCell: { flex: 1, textAlign: "center", fontSize: 12 },
   typeName: { flex: 2, textAlign: "left" },
